@@ -1,17 +1,17 @@
 package db
 
 import (
-	"database/sql"
+	"github.com/jmoiron/sqlx"
 )
 
 var (
-	Con *sql.DB
+	Connection *sqlx.DB
 )
 
-func Connect(f string) (*sql.DB, error) {
-	var db *sql.DB
+func Connect(f string) (*sqlx.DB, error) {
+	var db *sqlx.DB
 
-	db, err := sql.Open("sqlite3", f)
+	db, err := sqlx.Open("sqlite3", f)
 	if err != nil {
 		return nil, err
 	}
