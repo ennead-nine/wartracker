@@ -7,6 +7,7 @@ require (
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/google/uuid v1.4.0
 	github.com/jmoiron/sqlx v1.4.0
+	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/otiai10/gosseract/v2 v2.4.1
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0

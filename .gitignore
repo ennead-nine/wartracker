@@ -1,1 +1,3 @@
 *.db
+_data
+_bin

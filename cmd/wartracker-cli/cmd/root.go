@@ -24,6 +24,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"wartracker/pkg/db"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -56,7 +57,7 @@ func Execute() {
 }
 
 func init() {
-	cobra.OnInitialize(initConfig)
+	cobra.OnInitialize(initConfig, initDB)
 
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
@@ -90,5 +91,13 @@ func initConfig() {
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
+	}
+}
+
+func initDB() {
+	var err error
+	db.Connection, err = db.Connect("../../db/wartracker.db")
+	if err != nil {
+		panic(err)
 	}
 }
