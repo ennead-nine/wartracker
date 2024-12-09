@@ -22,23 +22,60 @@ THE SOFTWARE.
 package alliancecmd
 
 import (
+	"database/sql"
+	"encoding/json"
 	"fmt"
+	"io"
+	"os"
+	"wartracker/pkg/alliance"
 
 	"github.com/spf13/cobra"
 )
 
+var inputFile string
+
+func ReadAllianceJSON(a *alliance.Alliance) error {
+	in, err := os.Open(inputFile)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	jf, err := io.ReadAll(in)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(jf, a)
+}
+
+func CreateAlliance() error {
+	var a alliance.Alliance
+
+	err := ReadAllianceJSON(&a)
+	if err != nil {
+		return err
+	}
+
+	err = a.GetByTag(a.Data[0].Tag)
+	if err != sql.ErrNoRows {
+		return fmt.Errorf("alliance [%s] already exists", a.Data[0].Tag)
+	}
+
+	return a.Add(a.Server)
+}
+
 // createCmd represents the create command
 var createCmd = &cobra.Command{
 	Use:   "create",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Create an alliance from a JSON file",
+	Long: `Builds an alliance object from a JSON file created from "scan".  If 
+	the alliance already exists, data is added to the database for today's date.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("create called")
+		err := CreateAlliance()
+		if err != nil {
+			fmt.Println(err)
+		}
 	},
 }
 
@@ -54,4 +91,5 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// createCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	createCmd.Flags().StringVarP(&inputFile, "inputfile", "i", "", "JSON file to create an allaince")
 }

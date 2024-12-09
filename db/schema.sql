@@ -14,17 +14,6 @@ CREATE TABLE IF NOT EXISTS "commander_data"(
   FOREIGN KEY("alliance-id") REFERENCES "alliance"("id"),
   FOREIGN KEY("commander-id") REFERENCES "commander"("id")
 );
-CREATE TABLE IF NOT EXISTS "vsduel"(
-  "id"	TEXT NOT NULL,
-  "date"	TEXT NOT NULL,
-  "alliance1-id"	TEXT NOT NULL,
-  "alliance2-id"	TEXT NOT NULL,
-  "league"	TEXT,
-  "week"	INTEGER NOT NULL,
-  PRIMARY KEY("id"),
-  FOREIGN KEY("alliance1") REFERENCES "alliance"("id"),
-  FOREIGN KEY("alliance2") REFERENCES "alliance"("id")
-);
 CREATE TABLE IF NOT EXISTS "vsduel_data"(
   "alliance1-points"	INTEGER,
   "alliance2-points"	INTEGER,
@@ -55,15 +44,26 @@ CREATE TABLE IF NOT EXISTS "alliance"(
   "server"	INTEGER NOT NULL,
   PRIMARY KEY("id")
 );
+CREATE TABLE IF NOT EXISTS "vsduel"(
+  "id"	TEXT NOT NULL,
+  "date"	TEXT NOT NULL,
+  "alliance1-id"	TEXT NOT NULL,
+  "alliance2-id"	TEXT NOT NULL,
+  "league"	TEXT,
+  "week"	INTEGER NOT NULL,
+  PRIMARY KEY("id"),
+  FOREIGN KEY("alliance1-id") REFERENCES "alliance"("id"),
+  FOREIGN KEY("alliance2-id") REFERENCES "alliance"("id")
+);
 CREATE TABLE IF NOT EXISTS "alliance_data"(
   "name"	TEXT,
   "tag"	TEXT,
-  "date"	TEXT,
+  "date"	TEXT NOT NULL UNIQUE,
   "power"	INTEGER,
-  "gift-level"	INTEGER,
-  "member-count"	INTEGER,
-  "r5-id"	TEXT,
-  "alliance-id"	TEXT,
-  FOREIGN KEY("alliance-id") REFERENCES "alliance"("id"),
-  FOREIGN KEY("r5-id") REFERENCES "commander"("id")
+  "gift_level"	INTEGER,
+  "member_count"	INTEGER,
+  "r5_id"	TEXT,
+  "alliance_id"	TEXT,
+  FOREIGN KEY("alliance_id") REFERENCES "alliance"("id"),
+  FOREIGN KEY("r5_id") REFERENCES "commander"("id")
 );

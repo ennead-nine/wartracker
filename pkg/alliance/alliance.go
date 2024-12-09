@@ -1,9 +1,12 @@
 package alliance
 
 import (
+	"encoding/json"
 	"fmt"
 	"wartracker/pkg/db"
 	"wartracker/pkg/wtid"
+
+	"gopkg.in/yaml.v3"
 )
 
 type Alliance struct {
@@ -19,7 +22,7 @@ type Data struct {
 	Power       int64  `json:"power" yaml:"power" db:"power"`
 	GiftLevel   int64  `json:"gift-level" yaml:"giftLevel" db:"gift_level"`
 	MemberCount int64  `json:"member-count" yaml:"memberCount" db:"member_count"`
-	R5Id        string `json:"r5-id" yaml:"r5Id" db:"r5-id"`
+	R5Id        string `json:"r5-id" yaml:"r5Id" db:"r5_id"`
 	AllianceID  string `json:"alliance-id" yaml:"allianceId" db:"alliance_id"`
 }
 
@@ -85,14 +88,23 @@ func (a *Alliance) Add(server int64) error {
 
 // Populates an Alliance struct from the database by ID.  Gets all alliance data, with a.Data[0] being the latest
 func (a *Alliance) GetById(id string) error {
-	err := db.Connection.QueryRowx("SELECT * FROM aliiance WHERE id=?", id).StructScan(a)
+	err := db.Connection.QueryRowx("SELECT * FROM alliance WHERE id=?", id).StructScan(a)
 	if err != nil {
 		return err
 	}
 
-	err = db.Connection.QueryRowx("SELECT * FROM alliance_data WHERE alliance-id=?", id).StructScan(a.Data)
+	rows, err := db.Connection.Queryx("SELECT * FROM alliance_data WHERE alliance_id=? ORDER BY date DESC", id)
+
 	if err != nil {
 		return err
+	}
+	for rows.Next() {
+		var d Data
+		err = rows.StructScan(&d)
+		if err != nil {
+			return err
+		}
+		a.Data = append(a.Data, d)
 	}
 
 	return nil
@@ -107,12 +119,23 @@ func (a *Alliance) GetDataByDate(d string) error {
 func (a *Alliance) GetByTag(t string) error {
 	var id string
 
-	err := db.Connection.QueryRowx("SELECT alliance-id FROM alliance_data WHERE tag=? ORDER BY date DESC LIMIT 1", t).Scan(&id)
+	err := db.Connection.QueryRowx("SELECT alliance_id FROM alliance_data WHERE tag=? ORDER BY date DESC LIMIT 1", t).Scan(&id)
 	if err != nil {
 		return err
 	}
 
-	a.GetById(id)
+	err = a.GetById(id)
+	if err != nil {
+		return err
+	}
 
 	return nil
+}
+
+func (a *Alliance) AllianceToJSON() ([]byte, error) {
+	return json.MarshalIndent(a, "", "\t")
+}
+
+func (a *Alliance) AllianceToYAML() ([]byte, error) {
+	return yaml.Marshal(a)
 }

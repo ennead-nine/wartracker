@@ -22,20 +22,17 @@ THE SOFTWARE.
 package alliancecmd
 
 import (
-	"bytes"
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"image"
-	"image/color"
-	"image/draw"
 	"image/png"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 	"wartracker/pkg/alliance"
+	"wartracker/pkg/scanner"
 
-	"github.com/disintegration/imaging"
-	"github.com/otiai10/gosseract/v2"
 	"github.com/spf13/cobra"
 )
 
@@ -43,107 +40,62 @@ var imageFile string
 var outputFile string
 var server int64
 
-type SubImager interface {
-	SubImage(r image.Rectangle) image.Image
-}
-
-// PreProcessImage takes an image.Image object and applies filters for optimal OCR
-func PreProcessImage(img image.Image, gray, invert, bg bool) image.Image {
-	var ppimg = img
-	if gray {
-		ppimg = imaging.Grayscale(img)
-	}
-	if invert {
-		ppimg = imaging.Invert(ppimg)
-	}
-	if bg {
-		cimg := image.NewRGBA(ppimg.Bounds())
-		draw.Draw(cimg, ppimg.Bounds(), ppimg, image.Point{}, draw.Over)
-		fullrect := ppimg.Bounds()
-		for x := fullrect.Min.X; x <= fullrect.Max.X; x++ {
-			for y := fullrect.Min.Y; y <= fullrect.Max.Y; y++ {
-				r1, _, _, _ := cimg.At(x, y).RGBA()
-
-				if r1 >= 50 {
-					cimg.Set(x, y, color.RGBA{255, 255, 255, 255})
-				} else {
-					cimg.Set(x, y, color.RGBA{0, 0, 0, 255})
-				}
-			}
-		}
-		ppimg = cimg
-	}
-
-	return ppimg
-}
-
-func GetImageText(img image.Image, w string) (string, error) {
-	var buf bytes.Buffer
-	err := png.Encode(&buf, img)
-	if err != nil {
-		return "", err
-	}
-
-	client := gosseract.NewClient()
-	defer client.Close()
-
-	client.SetPageSegMode(6)
-	client.SetWhitelist(w)
-	client.SetTessdataPrefix("../../../../tesseract-ocr/tessdata")
-	client.SetImageFromBytes(buf.Bytes())
-	text, err := client.Text()
-	if err != nil {
-		return "", err
-	}
-
-	fmt.Printf("GetImageText: FOUND: %s\n", text)
-	text = strings.Replace(text, "<", "", -1)
-	text = strings.Replace(text, ">", "", -1)
-	return text, nil
-}
-
 // GetAllianceTagImage gets the alliance tag text from an alliance screenshot
 func GetAllianceTagText(img image.Image) (string, error) {
 	// Alliance tag rect
-	pointX := 157
-	pointY := 292
-	rectX := 48
-	rectY := 20
+	px := 157
+	py := 292
+	rx := 48
+	ry := 20
 
-	p := image.Point{pointX, pointY}
-	r := image.Rect(0, 0, rectX, rectY)
-	r = r.Add(p)
-	img = img.(SubImager).SubImage(r)
+	img = scanner.GetImageRect(px, py, rx, ry, img)
+	img, err := scanner.PreProcessImage(img, false, false, false)
+	if err != nil {
+		return "", err
+	}
 
-	img = PreProcessImage(img, false, false, false)
+	return scanner.GetImageText(img, "<>0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+}
 
-	outf, _ := os.Create(fmt.Sprintf("%s-tag.png", imageFile))
+// GetAllianceTagImage gets the alliance tag text from an alliance screenshot
+func GetAllianceNameText(img image.Image) (string, error) {
+	// Alliance tag rect
+	px := 204
+	py := 290
+	rx := 160
+	ry := 24
+
+	img = scanner.GetImageRect(px, py, rx, ry, img)
+	img, err := scanner.PreProcessImage(img, false, false, false)
+	if err != nil {
+		return "", err
+	}
+
+	outf, _ := os.Create(fmt.Sprintf("%s-name.png", imageFile))
 	defer outf.Close()
-	_ = png.Encode(outf, img)
+	err = png.Encode(outf, img)
+	if err != nil {
+		return "", err
+	}
 
-	return GetImageText(img, "<>0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	return scanner.GetImageText(img)
 }
 
 // GetAlliancePowerText gets the alliance power text from an alliance screenshot
 func GetAlliancePowerText(img image.Image) (int, error) {
 	// Alliance tag rect
-	pointX := 280
-	pointY := 317
-	rectX := 96
-	rectY := 18
+	px := 280
+	py := 317
+	rx := 96
+	ry := 18
 
-	p := image.Point{pointX, pointY}
-	r := image.Rect(0, 0, rectX, rectY)
-	r = r.Add(p)
-	img = img.(SubImager).SubImage(r)
+	img = scanner.GetImageRect(px, py, rx, ry, img)
+	img, err := scanner.PreProcessImage(img, true, true, true)
+	if err != nil {
+		return 0, err
+	}
 
-	img = PreProcessImage(img, true, true, true)
-
-	outf, _ := os.Create(fmt.Sprintf("%s-power.png", imageFile))
-	defer outf.Close()
-	_ = png.Encode(outf, img)
-
-	tpower, err := GetImageText(img, "0123456789")
+	tpower, err := scanner.GetImageText(img, "0123456789")
 	if err != nil {
 		return 0, err
 	}
@@ -159,23 +111,18 @@ func GetAlliancePowerText(img image.Image) (int, error) {
 // GetAllianceGiftImage gets the alliance gift level text from an alliance screenshot
 func GetAllianceGiftText(img image.Image) (int, error) {
 	// Alliance tag rect
-	pointX := 356
-	pointY := 351
-	rectX := 19
-	rectY := 15
+	px := 356
+	py := 351
+	rx := 19
+	ry := 15
 
-	p := image.Point{pointX, pointY}
-	r := image.Rect(0, 0, rectX, rectY)
-	r = r.Add(p)
-	img = img.(SubImager).SubImage(r)
+	img = scanner.GetImageRect(px, py, rx, ry, img)
+	img, err := scanner.PreProcessImage(img, true, true, true)
+	if err != nil {
+		return 0, err
+	}
 
-	img = PreProcessImage(img, true, true, true)
-
-	outf, _ := os.Create(fmt.Sprintf("%s-gift.png", imageFile))
-	defer outf.Close()
-	_ = png.Encode(outf, img)
-
-	tgift, err := GetImageText(img, "0123456789")
+	tgift, err := scanner.GetImageText(img, "0123456789")
 	if err != nil {
 		return 0, err
 	}
@@ -191,23 +138,18 @@ func GetAllianceGiftText(img image.Image) (int, error) {
 // GetAllianceGiftImage gets the alliance gift level text from an alliance screenshot
 func GetAllianceMemberText(img image.Image) (int, error) {
 	// Alliance tag rect
-	pointX := 316
-	pointY := 366
-	rectX := 28
-	rectY := 16
+	px := 316
+	py := 366
+	rx := 28
+	ry := 16
 
-	p := image.Point{pointX, pointY}
-	r := image.Rect(0, 0, rectX, rectY)
-	r = r.Add(p)
-	img = img.(SubImager).SubImage(r)
+	img = scanner.GetImageRect(px, py, rx, ry, img)
+	img, err := scanner.PreProcessImage(img, true, true, true)
+	if err != nil {
+		return 0, err
+	}
 
-	img = PreProcessImage(img, true, true, true)
-
-	outf, _ := os.Create(fmt.Sprintf("%s-member.png", imageFile))
-	defer outf.Close()
-	_ = png.Encode(outf, img)
-
-	tmemcount, err := GetImageText(img, "0123456789")
+	tmemcount, err := scanner.GetImageText(img, "0123456789")
 	if err != nil {
 		return 0, err
 	}
@@ -242,6 +184,10 @@ func ScanAlliance() (*alliance.Alliance, error) {
 	if err != nil {
 		return nil, err
 	}
+	name, err := GetAllianceNameText(img)
+	if err != nil {
+		return nil, err
+	}
 	power, err := GetAlliancePowerText(img)
 	if err != nil {
 		return nil, err
@@ -257,20 +203,33 @@ func ScanAlliance() (*alliance.Alliance, error) {
 
 	d.Date = time.Now().Format(time.DateOnly)
 	d.Tag = tag
+	d.Name = name
 	d.Power = int64(power)
 	d.GiftLevel = int64(gift)
 	d.MemberCount = int64(memcount)
 	a.Data = append(a.Data, d)
 	a.Server = server
+
 	err = a.GetByTag(d.Tag)
 	if err != nil {
-		err = a.Add(server)
-		if err != nil {
+		if err != sql.ErrNoRows {
 			return nil, err
 		}
+		fmt.Printf("A new alliance will need to be created from this data.  Please run 'wartracker-cli alliance new -o %s' after verifying the data\n", outputFile)
+	} else {
+		fmt.Printf("This alliance already exists. To add the new data run 'wartracker-cli alliance add -o %s' to add the new data.\n", outputFile)
 	}
 
-	fmt.Printf("Aliiance:\n%#v\n", a)
+	a.Data = a.Data[:1]
+
+	j, err := json.MarshalIndent(a, "", "\t")
+	if err != nil {
+		return nil, err
+	}
+	err = os.WriteFile(outputFile, j, 0644)
+	if err != nil {
+		return nil, err
+	}
 
 	return &a, nil
 }

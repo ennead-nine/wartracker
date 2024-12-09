@@ -25,12 +25,20 @@ import (
 	"fmt"
 	"os"
 	"wartracker/pkg/db"
+	"wartracker/pkg/scanner"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
-var cfgFile string
+var (
+	EnableTraverseRunHooks bool
+
+	cfgFile    string
+	DBFile     string
+	ScratchDir string
+	Debug      bool
+)
 
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = &cobra.Command{
@@ -57,17 +65,29 @@ func Execute() {
 }
 
 func init() {
-	cobra.OnInitialize(initConfig, initDB)
+	cobra.OnInitialize(initConfig, initDB, initScratch, initDebug)
+
+	EnableTraverseRunHooks = true
 
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
 	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.wartracker-cli.yaml)")
+	RootCmd.PersistentFlags().StringVar(&DBFile, "dbfile", "", "database file")
+	RootCmd.PersistentFlags().StringVar(&ScratchDir, "scratch", "", "Directory to store scratch files")
+	RootCmd.PersistentFlags().BoolVar(&Debug, "debug", false, "Directory to store scratch files")
+	cobra.CheckErr(viper.BindPFlag("dbfile", RootCmd.PersistentFlags().Lookup("dbfile")))
+	cobra.CheckErr(viper.BindPFlag("scratch", RootCmd.PersistentFlags().Lookup("scratch")))
+	cobra.CheckErr(viper.BindPFlag("debug", RootCmd.PersistentFlags().Lookup("debug")))
+	viper.SetDefault("dbfile", "db/wartracker.db")
+	viper.SetDefault("scratch", "_scratch")
+	viper.SetDefault("debug", false)
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
 	RootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -96,8 +116,30 @@ func initConfig() {
 
 func initDB() {
 	var err error
-	db.Connection, err = db.Connect("../../db/wartracker.db")
+	db.Connection, err = db.Connect(viper.GetString("dbfile"))
 	if err != nil {
 		panic(err)
+	}
+}
+
+func initScratch() {
+	ScratchDir := viper.GetString("scratch")
+	err := os.RemoveAll(ScratchDir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Unable to initialize scratch directory: ", ScratchDir)
+	}
+	err = os.MkdirAll(ScratchDir, 0755)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Unable to initialize scratch directory: ", ScratchDir)
+	}
+}
+
+func initDebug() {
+	if viper.GetBool("debug") {
+		scanner.Debug = true
+		scanner.Process = os.Getpid()
+		scanner.ScratchDir = viper.GetString("scratch")
+	} else {
+		scanner.Debug = false
 	}
 }
