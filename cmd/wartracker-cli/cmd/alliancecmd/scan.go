@@ -168,15 +168,9 @@ func ScanAlliance() (*alliance.Alliance, error) {
 	var a alliance.Alliance
 	var d alliance.Data
 
-	// Open image file
-	imgfile, err := os.Open(imageFile)
+	img, err := scanner.SetImageDensity(inputFile, 300)
 	if err != nil {
-		panic(err)
-	}
-	defer imgfile.Close()
-	img, err := png.Decode(imgfile)
-	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	// Setup alliance

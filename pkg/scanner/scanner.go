@@ -8,10 +8,12 @@ import (
 	"image/draw"
 	"image/png"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/disintegration/imaging"
 	"github.com/otiai10/gosseract/v2"
+	"gopkg.in/gographics/imagick.v3/imagick"
 )
 
 var (
@@ -65,6 +67,49 @@ func PreProcessImage(img image.Image, gray, invert, bg bool) (image.Image, error
 	}
 
 	return ppimg, nil
+}
+
+func SetImageDensity(inFile string, d int) (image.Image, error) {
+	imagick.Initialize()
+	// Schedule cleanup
+	defer imagick.Terminate()
+	var err error
+
+	mw := imagick.NewMagickWand()
+
+	i, err := os.OpenFile(inFile, os.O_RDONLY, 0644)
+	if err != nil {
+		return nil, err
+	}
+	defer i.Close()
+
+	err = mw.ReadImageFile(i)
+	if err != nil {
+		return nil, err
+	}
+
+	err = mw.SetResolution(float64(d), float64(d))
+	if err != nil {
+		return nil, err
+	}
+
+	outFile := ScratchDir + "/" + filepath.Base(inFile)
+	err = mw.WriteImage(outFile)
+	if err != nil {
+		return nil, err
+	}
+
+	imgfile, err := os.Open(outFile)
+	if err != nil {
+		return nil, err
+	}
+	defer imgfile.Close()
+	img, err := png.Decode(imgfile)
+	if err != nil {
+		return nil, err
+	}
+
+	return img, nil
 }
 
 func GetImageRect(px, py, rx, ry int, img image.Image) image.Image {
