@@ -20,18 +20,6 @@ CREATE TABLE IF NOT EXISTS "commander"(
   "note_name"	TEXT,
   PRIMARY KEY("id")
 );
-CREATE TABLE IF NOT EXISTS "commander_data"(
-  "date"	TEXT NOT NULL,
-  "name"	TEXT NOT NULL,
-  "hq_power"	INTEGER,
-  "kills"	INTEGER,
-  "profession_level"	INTEGER,
-  "total_hero_power"	INTEGER,
-  "commander_id"	TEXT NOT NULL,
-  "alliance_id"	TEXT NOT NULL,
-  FOREIGN KEY("alliance_id") REFERENCES "alliance"("id"),
-  FOREIGN KEY("commander_id") REFERENCES "commander"("id")
-);
 CREATE TABLE IF NOT EXISTS "vsduel"(
   "id"	TEXT NOT NULL,
   "date"	TEXT NOT NULL,
@@ -67,4 +55,18 @@ CREATE TABLE IF NOT EXISTS "vsduel_day"(
   "short_name"	TEXT NOT NULL,
   "day_of_week"	TEXT NOT NULL,
   PRIMARY KEY("id")
+);
+CREATE TABLE IF NOT EXISTS "commander_data"(
+  "date"	TEXT NOT NULL,
+  "pfp"	BLOB,
+  "hq_level"	INTEGER,
+  "likes"	INTEGER,
+  "hq_power"	INTEGER,
+  "kills"	INTEGER,
+  "profession_level"	INTEGER,
+  "total_hero_power"	INTEGER,
+  "commander_id"	TEXT NOT NULL,
+  "alliance_id"	TEXT NOT NULL,
+  FOREIGN KEY("alliance_id") REFERENCES "alliance"("id"),
+  FOREIGN KEY("commander_id") REFERENCES "commander"("id")
 );

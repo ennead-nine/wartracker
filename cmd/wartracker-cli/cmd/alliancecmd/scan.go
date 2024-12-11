@@ -25,10 +25,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"image"
-	"image/png"
 	"os"
-	"strconv"
 	"time"
 	"wartracker/pkg/alliance"
 	"wartracker/pkg/scanner"
@@ -40,157 +37,96 @@ var imageFile string
 var outputFile string
 var server int64
 
-// GetAllianceTagImage gets the alliance tag text from an alliance screenshot
-func GetAllianceTagText(img image.Image) (string, error) {
-	// Alliance tag rect
-	px := 157
-	py := 292
-	rx := 48
-	ry := 20
-
-	img = scanner.GetImageRect(px, py, rx, ry, img)
-	img, err := scanner.PreProcessImage(img, false, false, false)
-	if err != nil {
-		return "", err
+func ImageMapper(im *scanner.ImageMap, field string) {
+	switch field {
+	case "tag":
+		im.PX = 157
+		im.PY = 292
+		im.RX = 48
+		im.RY = 20
+		im.Filter = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+		im.Gray = false
+		im.Invert = false
+		im.BG = false
+	case "name":
+		im.PX = 204
+		im.PY = 290
+		im.RX = 160
+		im.RY = 24
+		im.Filter = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+		im.Gray = false
+		im.Invert = false
+		im.BG = false
+	case "power":
+		im.PX = 280
+		im.PY = 317
+		im.RX = 96
+		im.RY = 18
+		im.Filter = "0123456789"
+		im.Gray = true
+		im.Invert = true
+		im.BG = true
+	case "giftlevel":
+		im.PX = 356
+		im.PY = 351
+		im.RX = 19
+		im.RY = 15
+		im.Filter = "0123456789"
+		im.Gray = true
+		im.Invert = true
+		im.BG = true
+	case "membercount":
+		im.PX = 316
+		im.PY = 366
+		im.RX = 28
+		im.RY = 16
+		im.Filter = "0123456789"
+		im.Gray = true
+		im.Invert = true
+		im.BG = true
 	}
-
-	return scanner.GetImageText(img, "<>0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-}
-
-// GetAllianceTagImage gets the alliance tag text from an alliance screenshot
-func GetAllianceNameText(img image.Image) (string, error) {
-	// Alliance tag rect
-	px := 204
-	py := 290
-	rx := 160
-	ry := 24
-
-	img = scanner.GetImageRect(px, py, rx, ry, img)
-	img, err := scanner.PreProcessImage(img, false, false, false)
-	if err != nil {
-		return "", err
-	}
-
-	outf, _ := os.Create(fmt.Sprintf("%s-name.png", imageFile))
-	defer outf.Close()
-	err = png.Encode(outf, img)
-	if err != nil {
-		return "", err
-	}
-
-	return scanner.GetImageText(img)
-}
-
-// GetAlliancePowerText gets the alliance power text from an alliance screenshot
-func GetAlliancePowerText(img image.Image) (int, error) {
-	// Alliance tag rect
-	px := 280
-	py := 317
-	rx := 96
-	ry := 18
-
-	img = scanner.GetImageRect(px, py, rx, ry, img)
-	img, err := scanner.PreProcessImage(img, true, true, true)
-	if err != nil {
-		return 0, err
-	}
-
-	tpower, err := scanner.GetImageText(img, "0123456789")
-	if err != nil {
-		return 0, err
-	}
-
-	power, err := strconv.Atoi(tpower)
-	if err != nil {
-		return 0, err
-	}
-
-	return power, nil
-}
-
-// GetAllianceGiftImage gets the alliance gift level text from an alliance screenshot
-func GetAllianceGiftText(img image.Image) (int, error) {
-	// Alliance tag rect
-	px := 356
-	py := 351
-	rx := 19
-	ry := 15
-
-	img = scanner.GetImageRect(px, py, rx, ry, img)
-	img, err := scanner.PreProcessImage(img, true, true, true)
-	if err != nil {
-		return 0, err
-	}
-
-	tgift, err := scanner.GetImageText(img, "0123456789")
-	if err != nil {
-		return 0, err
-	}
-
-	gift, err := strconv.Atoi(tgift)
-	if err != nil {
-		return 0, err
-	}
-
-	return gift, nil
-}
-
-// GetAllianceGiftImage gets the alliance gift level text from an alliance screenshot
-func GetAllianceMemberText(img image.Image) (int, error) {
-	// Alliance tag rect
-	px := 316
-	py := 366
-	rx := 28
-	ry := 16
-
-	img = scanner.GetImageRect(px, py, rx, ry, img)
-	img, err := scanner.PreProcessImage(img, true, true, true)
-	if err != nil {
-		return 0, err
-	}
-
-	tmemcount, err := scanner.GetImageText(img, "0123456789")
-	if err != nil {
-		return 0, err
-	}
-
-	memcount, err := strconv.Atoi(tmemcount)
-	if err != nil {
-		return 0, err
-	}
-
-	return memcount, nil
 }
 
 // ScanAlliance pre-processes the given image file and scans it with tessaract
 // into an alliance.Alliance struct
 func ScanAlliance() (*alliance.Alliance, error) {
+	var im scanner.ImageMap
 	var a alliance.Alliance
 	var d alliance.Data
 
-	img, err := scanner.SetImageDensity(inputFile, 300)
+	img, err := scanner.SetImageDensity(imageFile, 300)
+	if err != nil {
+		return nil, err
+	}
+	im.Image = img
+
+	// Setup alliance
+	ImageMapper(&im, "tag")
+	tag, err := im.ProcessImageText()
 	if err != nil {
 		return nil, err
 	}
 
-	// Setup alliance
-	tag, err := GetAllianceTagText(img)
+	ImageMapper(&im, "name")
+	name, err := im.ProcessImageText()
 	if err != nil {
 		return nil, err
 	}
-	name, err := GetAllianceNameText(img)
+
+	ImageMapper(&im, "power")
+	power, err := im.ProcessImageInt()
 	if err != nil {
 		return nil, err
 	}
-	power, err := GetAlliancePowerText(img)
+
+	ImageMapper(&im, "giftlevel")
+	giftlevel, err := im.ProcessImageInt()
 	if err != nil {
 		return nil, err
 	}
-	gift, err := GetAllianceGiftText(img)
-	if err != nil {
-		return nil, err
-	}
-	memcount, err := GetAllianceMemberText(img)
+
+	ImageMapper(&im, "membercount")
+	membercount, err := im.ProcessImageInt()
 	if err != nil {
 		return nil, err
 	}
@@ -199,8 +135,8 @@ func ScanAlliance() (*alliance.Alliance, error) {
 	d.Tag = tag
 	d.Name = name
 	d.Power = int64(power)
-	d.GiftLevel = int64(gift)
-	d.MemberCount = int64(memcount)
+	d.GiftLevel = int64(giftlevel)
+	d.MemberCount = int64(membercount)
 	a.Data = append(a.Data, d)
 	a.Server = server
 

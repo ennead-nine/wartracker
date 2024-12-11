@@ -34,10 +34,11 @@ import (
 var (
 	EnableTraverseRunHooks bool
 
-	cfgFile    string
-	DBFile     string
-	ScratchDir string
-	Debug      bool
+	cfgFile     string
+	DBFile      string
+	ScratchDir  string
+	Debug       bool
+	TessdataDir string
 )
 
 // RootCmd represents the base command when called without any subcommands
@@ -65,7 +66,7 @@ func Execute() {
 }
 
 func init() {
-	cobra.OnInitialize(initConfig, initDB, initScratch, initDebug)
+	cobra.OnInitialize(initConfig, initDB, initScratch, initDebug, initTessdataDir)
 
 	EnableTraverseRunHooks = true
 
@@ -77,12 +78,15 @@ func init() {
 	RootCmd.PersistentFlags().StringVar(&DBFile, "dbfile", "", "database file")
 	RootCmd.PersistentFlags().StringVar(&ScratchDir, "scratch", "", "Directory to store scratch files")
 	RootCmd.PersistentFlags().BoolVar(&Debug, "debug", false, "Directory to store scratch files")
+	RootCmd.PersistentFlags().StringVar(&TessdataDir, "tessdata", "", "Tesseract data directory")
 	cobra.CheckErr(viper.BindPFlag("dbfile", RootCmd.PersistentFlags().Lookup("dbfile")))
 	cobra.CheckErr(viper.BindPFlag("scratch", RootCmd.PersistentFlags().Lookup("scratch")))
 	cobra.CheckErr(viper.BindPFlag("debug", RootCmd.PersistentFlags().Lookup("debug")))
+	cobra.CheckErr(viper.BindPFlag("tessdata", RootCmd.PersistentFlags().Lookup("tessdata")))
 	viper.SetDefault("dbfile", "db/wartracker.db")
 	viper.SetDefault("scratch", "_scratch")
 	viper.SetDefault("debug", false)
+	viper.SetDefault("tessdata", "/Users/erumer/src/github.com/tesseract-ocr/tessdata")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
@@ -142,4 +146,9 @@ func initDebug() {
 	} else {
 		scanner.Debug = false
 	}
+}
+
+func initTessdataDir() {
+	TessdataDir = viper.GetString("tessdata")
+	scanner.TessdataDir = TessdataDir
 }

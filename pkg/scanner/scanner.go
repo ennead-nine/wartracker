@@ -7,8 +7,10 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
+	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/disintegration/imaging"
@@ -17,13 +19,67 @@ import (
 )
 
 var (
-	Debug      bool
-	Process    int
-	ScratchDir string
+	Debug       bool
+	Process     int
+	ScratchDir  string
+	TessdataDir string
 )
+
+type ImageMap struct {
+	Rect
+	CharFilter
+	PreProcess
+	Image image.Image
+}
+
+type Rect struct {
+	PX int
+	PY int
+	RX int
+	RY int
+}
+
+type CharFilter struct {
+	Filter string
+}
+
+type PreProcess struct {
+	Gray   bool
+	Invert bool
+	BG     bool
+}
 
 type SubImager interface {
 	SubImage(r image.Rectangle) image.Image
+}
+
+func ParseAbbvInt(s string) (int64, error) {
+	if len(s) < 2 {
+		return 0, fmt.Errorf("length of string \"%s\" is less than 2", s)
+	}
+	trim := strings.TrimSpace(s)
+	unit := trim[len(trim)-1:]
+	unit = strings.ToUpper(unit)
+	tbase := strings.TrimRight(trim, "KMG")
+	base, err := strconv.ParseFloat(tbase, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	switch unit {
+	case "K":
+		i := int64(math.Round(base * 1000))
+		return i, nil
+	case "M":
+		i := int64(math.Round(base * 1000000))
+		return i, nil
+	case "G":
+		i := int64(math.Round(base * 1000000000))
+		return i, nil
+	default:
+		i := int64(math.Round(base))
+		return i, nil
+	}
 }
 
 // PreProcessImage takes an image.Image object and applies filters for optimal OCR
@@ -136,17 +192,90 @@ func GetImageText(img image.Image, w ...string) (string, error) {
 
 	client.SetPageSegMode(6)
 	if w != nil {
-		client.SetWhitelist(w[0])
+		if w[0] != "" {
+			client.SetWhitelist(w[0])
+		}
 	}
-	client.SetTessdataPrefix("/Users/erumer/src/github.com/tesseract-ocr/tessdata")
+	client.SetTessdataPrefix(TessdataDir)
 	client.SetImageFromBytes(buf.Bytes())
 	text, err := client.Text()
 	if err != nil {
 		return "", err
 	}
 
-	fmt.Printf("GetImageText: FOUND: %s\n", text)
-	text = strings.Replace(text, "<", "", -1)
-	text = strings.Replace(text, ">", "", -1)
+	if Debug {
+		fmt.Printf("GetImageText: FOUND: %s\n", text)
+	}
 	return text, nil
+}
+
+func (im *ImageMap) ProcessImage() ([]byte, error) {
+	img := GetImageRect(im.PX, im.PY, im.RX, im.RY, im.Image)
+	img, err := PreProcessImage(img, im.Gray, im.Invert, im.BG)
+	if err != nil {
+		return nil, err
+	}
+
+	var buf bytes.Buffer
+	err = png.Encode(&buf, img)
+	if err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+func (im *ImageMap) ProcessImageInt() (int64, error) {
+	img := GetImageRect(im.PX, im.PY, im.RX, im.RY, im.Image)
+	img, err := PreProcessImage(img, im.Gray, im.Invert, im.BG)
+	if err != nil {
+		return 0, err
+	}
+
+	t, err := GetImageText(img, im.Filter)
+	if err != nil {
+		return 0, err
+	}
+
+	i, err := strconv.Atoi(t)
+	if err != nil {
+		return 0, err
+	}
+
+	return int64(i), nil
+}
+
+func (im *ImageMap) ProcessImageAbbrInt() (int64, error) {
+	img := GetImageRect(im.PX, im.PY, im.RX, im.RY, im.Image)
+	img, err := PreProcessImage(img, im.Gray, im.Invert, im.BG)
+	if err != nil {
+		return 0, err
+	}
+
+	t, err := GetImageText(img, im.Filter)
+	if err != nil {
+		return 0, err
+	}
+
+	i, err := ParseAbbvInt(t)
+	if err != nil {
+		return 0, err
+	}
+
+	return int64(i), nil
+}
+
+func (im *ImageMap) ProcessImageText() (string, error) {
+	img := GetImageRect(im.PX, im.PY, im.RX, im.RY, im.Image)
+	img, err := PreProcessImage(img, im.Gray, im.Invert, im.BG)
+	if err != nil {
+		return "", err
+	}
+
+	t, err := GetImageText(img, im.Filter)
+	if err != nil {
+		return "", err
+	}
+
+	return t, nil
 }
