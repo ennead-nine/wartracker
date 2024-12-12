@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"wartracker/cmd/wartracker-cli/cmd"
 	"wartracker/pkg/alliance"
 	"wartracker/pkg/commander"
 	"wartracker/pkg/scanner"
@@ -33,150 +34,77 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Variables for flags
-var imageFile string
-var outputFile string
-var server int64
-
-// ImageMapper builds a scanner.ImageMap object with data for the parts of a
-// commander image that need to be parsed.
-func ImageMapper(im *scanner.ImageMap, field string) {
-	switch field {
-	case "pfp":
-		im.PX = 88
-		im.PY = 526
-		im.RX = 450
-		im.RY = 450
-		im.Filter = ""
-		im.Gray = false
-		im.Invert = false
-		im.BG = false
-	case "hqlevel":
-		im.PX = 177
-		im.PY = 1122
-		im.RX = 131
-		im.RY = 70
-		im.Filter = "0123456789"
-		im.Gray = true
-		im.Invert = true
-		im.BG = true
-	case "nametag":
-		im.PX = 300
-		im.PY = 1114
-		im.RX = 538
-		im.RY = 86
-		im.Filter = "[]0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-		im.Gray = true
-		im.Invert = true
-		im.BG = true
-	case "hqpower":
-		im.PX = 177
-		im.PY = 1237
-		im.RX = 178
-		im.RY = 78
-		im.Filter = "0123456789.KMG"
-		im.Gray = false
-		im.Invert = false
-		im.BG = false
-	case "kills":
-		im.PX = 498
-		im.PY = 1237
-		im.RX = 173
-		im.RY = 71
-		im.Filter = "0123456789.KMG"
-		im.Gray = false
-		im.Invert = false
-		im.BG = false
-	case "proflevel":
-		im.PX = 798
-		im.PY = 1234
-		im.RX = 173
-		im.RY = 71
-		im.Filter = "0123456789"
-		im.Gray = false
-		im.Invert = false
-		im.BG = false
-	}
-}
-
 // ScanCommander processes the given image file and scans it with tessaract
 // into an commander.Commander struct
 func ScanCommander() (*commander.Commander, error) {
-	var im scanner.ImageMap
 	var c commander.Commander
 	var d commander.Data
 	var a alliance.Alliance
+	var tag string
 
-	// Get the image ready for scanning
-	img, err := scanner.SetImageDensity(imageFile, 300)
-	if err != nil {
-		return nil, err
-	}
-	im.Image = img
+	initImageMaps("commander")
 
-	// Get commander's profile pic
-	ImageMapper(&im, "pfp")
-	pfp, err := im.ProcessImage()
+	img, err := scanner.SetImageDensity(infile, 300)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get commander's HQ level
-	ImageMapper(&im, "hqlevel")
-	hqlevel, err := im.ProcessImageInt()
-	if err != nil {
-		return nil, err
-	}
-
-	// Get commander's name and tag.  Scanning returns "[TAG]Name" and gets
-	// parsed into tag and name
-	ImageMapper(&im, "nametag")
-	nametag, err := im.ProcessImageText()
-	if err != nil {
-		return nil, err
-	}
-	names := strings.Split(nametag, "]")
-	tag := names[0][1:]
-	name := names[1]
-
-	// Get commander's HQ power
-	ImageMapper(&im, "hqpower")
-	hqpower, err := im.ProcessImageAbbrInt()
-	if err != nil {
-		return nil, err
-	}
-
-	// Get commander's kills
-	ImageMapper(&im, "kills")
-	kills, err := im.ProcessImageAbbrInt()
-	if err != nil {
-		return nil, err
-	}
-
-	// Get commander's profession level
-	ImageMapper(&im, "proflevel")
-	proflevel, err := im.ProcessImageInt()
-	if err != nil {
-		return nil, err
-	}
-
-	// Buildout the commander.Commander struct to save to JSON
-	d.PFP = pfp
-	d.HQLevel = hqlevel
-	c.NoteName = name
-	d.HQPower = hqpower
-	d.Kills = kills
-	d.ProfessionLevel = proflevel
-	err = a.GetByTag(tag)
-	if err != nil {
-		if err != sql.ErrNoRows {
+	for k, im := range Imm {
+		switch k {
+		case "pfp":
+			if cmd.Debug {
+				fmt.Printf("scanning %s...\n", k)
+			}
+			d.PFP, err = im.ProcessImage(img)
+		case "hqlevel":
+			if cmd.Debug {
+				fmt.Printf("scanning %s...\n", k)
+			}
+			d.HQLevel, err = im.ProcessImageInt(img)
+		case "nametag":
+			if cmd.Debug {
+				fmt.Printf("scanning %s...\n", k)
+			}
+			nt, err := im.ProcessImageText(img)
+			if err != nil {
+				return nil, err
+			}
+			names := strings.Split(nt, "]")
+			tag = names[0][1:]
+			err = a.GetByTag(tag)
+			if err != nil && err != sql.ErrNoRows {
+				return nil, err
+			}
+			d.AllianceID = a.Id
+			c.NoteName = names[1]
+		case "hqpower":
+			if cmd.Debug {
+				fmt.Printf("scanning %s...\n", k)
+			}
+			d.HQPower, err = im.ProcessImageAbbrInt(img)
+		case "kills":
+			if cmd.Debug {
+				fmt.Printf("scanning %s...\n", k)
+			}
+			d.Kills, err = im.ProcessImageAbbrInt(img)
+		case "proflevel":
+			if cmd.Debug {
+				fmt.Printf("scanning %s...\n", k)
+			}
+			d.ProfessionLevel, err = im.ProcessImageInt(img)
+		default:
+			return nil, fmt.Errorf("invalid key \"%s\" in map configuration", k)
+		}
+		if err != nil {
 			return nil, err
 		}
+	}
+
+	if a.Id == "" {
 		fmt.Printf("Commander's alliance [%s] does not exist in the database\n", tag)
 	} else {
 		fmt.Printf("Associating commander with [%s]%s", tag, a.Data[0].Name)
 	}
-	d.AllianceID = a.Id
 
 	c.Data = append(c.Data, d)
 
@@ -184,7 +112,7 @@ func ScanCommander() (*commander.Commander, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = os.WriteFile(outputFile, j, 0644)
+	err = os.WriteFile(outfile, j, 0644)
 	if err != nil {
 		return nil, err
 	}
@@ -222,12 +150,13 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// scanCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-	scanCmd.Flags().StringVarP(&imageFile, "image", "i", "", "image file (PNG) to scan for commander data")
+	scanCmd.Flags().StringVarP(&infile, "image", "i", "", "image file (PNG) to scan for commander data")
 	scanCmd.MarkFlagRequired("image")
 	scanCmd.MarkFlagFilename("image")
-	scanCmd.Flags().StringVarP(&outputFile, "output", "o", "", "JSON file to output commander data to")
+	scanCmd.Flags().StringVarP(&outfile, "output", "o", "", "JSON file to output commander data to")
 	scanCmd.MarkFlagRequired("output")
 	scanCmd.MarkFlagFilename("output")
 	scanCmd.Flags().Int64VarP(&server, "server", "s", 1, "Commander's server number")
 	scanCmd.MarkFlagRequired("server")
+
 }

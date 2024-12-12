@@ -32,10 +32,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var inputFile string
-
 func ReadAllianceJSON(a *alliance.Alliance) error {
-	in, err := os.Open(inputFile)
+	in, err := os.Open(infile)
 	if err != nil {
 		return err
 	}
@@ -91,5 +89,5 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// createCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-	createCmd.Flags().StringVarP(&inputFile, "inputfile", "i", "", "JSON file to create an allaince")
+	createCmd.Flags().StringVarP(&infile, "inputfile", "i", "", "JSON file to create an allaince")
 }

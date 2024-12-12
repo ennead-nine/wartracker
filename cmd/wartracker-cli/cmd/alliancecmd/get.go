@@ -28,18 +28,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var Id string
-var Tag string
-
 func GetAlliance() error {
 	var a alliance.Alliance
 	var o []byte
 	var err error
 
-	if Id != "" {
-		err = a.GetById(Id)
-	} else if Tag != "" {
-		err = a.GetByTag(Tag)
+	if id != "" {
+		err = a.GetById(id)
+	} else if tag != "" {
+		err = a.GetByTag(tag)
 	}
 	if err != nil {
 		return err
@@ -83,8 +80,8 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// scanCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-	getCmd.Flags().StringVarP(&Id, "id", "i", "", "Alliance's wartracker ID")
-	getCmd.Flags().StringVarP(&Tag, "tag", "t", "", "Alliance's in game tag")
+	getCmd.Flags().StringVarP(&id, "id", "i", "", "Alliance's wartracker ID")
+	getCmd.Flags().StringVarP(&tag, "tag", "t", "", "Alliance's in game tag")
 	getCmd.MarkFlagsOneRequired("id", "tag")
 	getCmd.MarkFlagsMutuallyExclusive("id", "tag")
 }

@@ -23,10 +23,15 @@ package alliancecmd
 
 import (
 	"fmt"
+	"io"
+	"os"
 
 	"wartracker/cmd/wartracker-cli/cmd"
+	"wartracker/pkg/scanner"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 )
 
 // allianceCmd represents the alliance command
@@ -56,4 +61,35 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// allianceCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+}
+
+var (
+	// Common flag variables
+	infile  string
+	outfile string
+	server  int64
+	id      string
+	tag     string
+
+	Imm scanner.ImageMaps
+)
+
+func initImageMaps(m string) {
+	Imm = make(scanner.ImageMaps)
+
+	in, err := os.Open(fmt.Sprintf("%s/%s.yaml", viper.GetString("mapdir"), m))
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer in.Close()
+
+	yf, err := io.ReadAll(in)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	err = yaml.Unmarshal(yf, Imm)
+	if err != nil {
+		fmt.Println(err)
+	}
 }

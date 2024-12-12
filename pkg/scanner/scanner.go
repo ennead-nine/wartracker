@@ -23,30 +23,32 @@ var (
 	Process     int
 	ScratchDir  string
 	TessdataDir string
+	Languages   []string
 )
 
 type ImageMap struct {
 	Rect
 	CharFilter
 	PreProcess
-	Image image.Image
 }
 
+type ImageMaps map[string]ImageMap
+
 type Rect struct {
-	PX int
-	PY int
-	RX int
-	RY int
+	PX int `yaml:"px"`
+	PY int `yaml:"py"`
+	RX int `yaml:"rx"`
+	RY int `yaml:"ry"`
 }
 
 type CharFilter struct {
-	Filter string
+	Filter string `yaml:"filter"`
 }
 
 type PreProcess struct {
-	Gray   bool
-	Invert bool
-	BG     bool
+	Gray   bool `yaml:"gray"`
+	Invert bool `yaml:"invert"`
+	BG     bool `yaml:"bg"`
 }
 
 type SubImager interface {
@@ -99,7 +101,7 @@ func PreProcessImage(img image.Image, gray, invert, bg bool) (image.Image, error
 			for y := fullrect.Min.Y; y <= fullrect.Max.Y; y++ {
 				r1, _, _, _ := cimg.At(x, y).RGBA()
 
-				if r1 >= 50 {
+				if r1 >= 64 {
 					cimg.Set(x, y, color.RGBA{255, 255, 255, 255})
 				} else {
 					cimg.Set(x, y, color.RGBA{0, 0, 0, 255})
@@ -196,6 +198,9 @@ func GetImageText(img image.Image, w ...string) (string, error) {
 			client.SetWhitelist(w[0])
 		}
 	}
+	if len(Languages) > 0 {
+		client.SetLanguage(Languages...)
+	}
 	client.SetTessdataPrefix(TessdataDir)
 	client.SetImageFromBytes(buf.Bytes())
 	text, err := client.Text()
@@ -209,8 +214,8 @@ func GetImageText(img image.Image, w ...string) (string, error) {
 	return text, nil
 }
 
-func (im *ImageMap) ProcessImage() ([]byte, error) {
-	img := GetImageRect(im.PX, im.PY, im.RX, im.RY, im.Image)
+func (im *ImageMap) ProcessImage(img image.Image) ([]byte, error) {
+	img = GetImageRect(im.PX, im.PY, im.RX, im.RY, img)
 	img, err := PreProcessImage(img, im.Gray, im.Invert, im.BG)
 	if err != nil {
 		return nil, err
@@ -225,8 +230,8 @@ func (im *ImageMap) ProcessImage() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (im *ImageMap) ProcessImageInt() (int64, error) {
-	img := GetImageRect(im.PX, im.PY, im.RX, im.RY, im.Image)
+func (im *ImageMap) ProcessImageInt(img image.Image) (int64, error) {
+	img = GetImageRect(im.PX, im.PY, im.RX, im.RY, img)
 	img, err := PreProcessImage(img, im.Gray, im.Invert, im.BG)
 	if err != nil {
 		return 0, err
@@ -245,8 +250,8 @@ func (im *ImageMap) ProcessImageInt() (int64, error) {
 	return int64(i), nil
 }
 
-func (im *ImageMap) ProcessImageAbbrInt() (int64, error) {
-	img := GetImageRect(im.PX, im.PY, im.RX, im.RY, im.Image)
+func (im *ImageMap) ProcessImageAbbrInt(img image.Image) (int64, error) {
+	img = GetImageRect(im.PX, im.PY, im.RX, im.RY, img)
 	img, err := PreProcessImage(img, im.Gray, im.Invert, im.BG)
 	if err != nil {
 		return 0, err
@@ -265,8 +270,8 @@ func (im *ImageMap) ProcessImageAbbrInt() (int64, error) {
 	return int64(i), nil
 }
 
-func (im *ImageMap) ProcessImageText() (string, error) {
-	img := GetImageRect(im.PX, im.PY, im.RX, im.RY, im.Image)
+func (im *ImageMap) ProcessImageText(img image.Image) (string, error) {
+	img = GetImageRect(im.PX, im.PY, im.RX, im.RY, img)
 	img, err := PreProcessImage(img, im.Gray, im.Invert, im.BG)
 	if err != nil {
 		return "", err

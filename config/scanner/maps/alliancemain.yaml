@@ -1,0 +1,60 @@
+giftlevel:
+    rect:
+        px: 50
+        py: 420
+        rx: 170
+        ry: 51
+    charfilter:
+        filter: "0123456789"
+    preprocess:
+        gray: true
+        invert: true
+        bg: true
+membercount:
+    rect:
+        px: 646
+        py: 624
+        rx: 145
+        ry: 70
+    charfilter:
+        filter: "0123456789"
+    preprocess:
+        gray: false
+        invert: false
+        bg: false
+name:
+    rect:
+        px: 160
+        py: 546
+        rx: 798
+        ry: 65
+    charfilter:
+        filter: 0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
+    preprocess:
+        gray: false
+        invert: false
+        bg: false
+power:
+    rect:
+        px: 189
+        py: 681
+        rx: 333
+        ry: 60
+    charfilter:
+        filter: "0123456789"
+    preprocess:
+        gray: false
+        invert: false
+        bg: false
+tag:
+    rect:
+        px: 33
+        py: 546
+        rx: 131
+        ry: 65
+    charfilter:
+        filter: 0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
+    preprocess:
+        gray: false
+        invert: false
+        bg: false

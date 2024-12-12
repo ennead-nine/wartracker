@@ -32,13 +32,14 @@ import (
 )
 
 var (
-	EnableTraverseRunHooks bool
-
-	cfgFile     string
+	//Configuration variables
+	ConfigFile  string
 	DBFile      string
 	ScratchDir  string
 	Debug       bool
 	TessdataDir string
+	Languages   []string
+	MapDir      string
 )
 
 // RootCmd represents the base command when called without any subcommands
@@ -66,39 +67,34 @@ func Execute() {
 }
 
 func init() {
-	cobra.OnInitialize(initConfig, initDB, initScratch, initDebug, initTessdataDir)
+	cobra.OnInitialize(initConfig)
 
-	EnableTraverseRunHooks = true
-
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-
-	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.wartracker-cli.yaml)")
+	RootCmd.PersistentFlags().StringVar(&ConfigFile, "config", "", "config file (default is $HOME/.wartracker-cli.yaml)")
 	RootCmd.PersistentFlags().StringVar(&DBFile, "dbfile", "", "database file")
 	RootCmd.PersistentFlags().StringVar(&ScratchDir, "scratch", "", "Directory to store scratch files")
 	RootCmd.PersistentFlags().BoolVar(&Debug, "debug", false, "Directory to store scratch files")
 	RootCmd.PersistentFlags().StringVar(&TessdataDir, "tessdata", "", "Tesseract data directory")
+	RootCmd.PersistentFlags().StringSliceVar(&Languages, "languages", nil, "Tesseract languages to use")
+	RootCmd.PersistentFlags().StringVar(&MapDir, "mapdir", "", "Directory for command maps")
 	cobra.CheckErr(viper.BindPFlag("dbfile", RootCmd.PersistentFlags().Lookup("dbfile")))
 	cobra.CheckErr(viper.BindPFlag("scratch", RootCmd.PersistentFlags().Lookup("scratch")))
 	cobra.CheckErr(viper.BindPFlag("debug", RootCmd.PersistentFlags().Lookup("debug")))
 	cobra.CheckErr(viper.BindPFlag("tessdata", RootCmd.PersistentFlags().Lookup("tessdata")))
+	cobra.CheckErr(viper.BindPFlag("languages", RootCmd.PersistentFlags().Lookup("languages")))
+	cobra.CheckErr(viper.BindPFlag("mapdir", RootCmd.PersistentFlags().Lookup("mapdir")))
 	viper.SetDefault("dbfile", "db/wartracker.db")
 	viper.SetDefault("scratch", "_scratch")
 	viper.SetDefault("debug", false)
 	viper.SetDefault("tessdata", "/Users/erumer/src/github.com/tesseract-ocr/tessdata")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	RootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-
+	viper.SetDefault("languages", nil)
+	viper.SetDefault("mapdir", "config/scanner/maps")
 }
 
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
-	if cfgFile != "" {
+	if ConfigFile != "" {
 		// Use config file from the flag.
-		viper.SetConfigFile(cfgFile)
+		viper.SetConfigFile(ConfigFile)
 	} else {
 		// Find home directory.
 		home, err := os.UserHomeDir()
@@ -116,6 +112,13 @@ func initConfig() {
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
 	}
+
+	initDB()
+	initScratch()
+	initDebug()
+	initLanguages()
+	initMapDir()
+	initTessdataDir()
 }
 
 func initDB() {
@@ -127,14 +130,14 @@ func initDB() {
 }
 
 func initScratch() {
-	ScratchDir := viper.GetString("scratch")
-	err := os.RemoveAll(ScratchDir)
+	Scratch := viper.GetString("scratch")
+	err := os.RemoveAll(Scratch)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Unable to initialize scratch directory: ", ScratchDir)
+		fmt.Fprintln(os.Stderr, "Unable to initialize scratch directory: ", Scratch)
 	}
-	err = os.MkdirAll(ScratchDir, 0755)
+	err = os.MkdirAll(Scratch, 0755)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Unable to initialize scratch directory: ", ScratchDir)
+		fmt.Fprintln(os.Stderr, "Unable to initialize scratch directory: ", Scratch)
 	}
 }
 
@@ -151,4 +154,13 @@ func initDebug() {
 func initTessdataDir() {
 	TessdataDir = viper.GetString("tessdata")
 	scanner.TessdataDir = TessdataDir
+}
+
+func initLanguages() {
+	Languages = viper.GetStringSlice("languages")
+	scanner.Languages = Languages
+}
+
+func initMapDir() {
+	MapDir = viper.GetString("mapdir")
 }
