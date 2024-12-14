@@ -71,6 +71,7 @@ func ScanAlliance() (*alliance.Alliance, error) {
 
 	d.Date = time.Now().Format(time.DateOnly)
 	a.Data = append(a.Data, d)
+	a.Data = a.Data[1:]
 	a.Server = server
 
 	err = a.GetByTag(d.Tag)

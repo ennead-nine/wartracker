@@ -23,29 +23,11 @@ package alliancecmd
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
-	"io"
-	"os"
 	"wartracker/pkg/alliance"
 
 	"github.com/spf13/cobra"
 )
-
-func ReadAllianceJSON(a *alliance.Alliance) error {
-	in, err := os.Open(infile)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	jf, err := io.ReadAll(in)
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(jf, a)
-}
 
 func CreateAlliance() error {
 	var a alliance.Alliance
@@ -60,7 +42,7 @@ func CreateAlliance() error {
 		return fmt.Errorf("alliance [%s] already exists", a.Data[0].Tag)
 	}
 
-	return a.Add(a.Server)
+	return a.Create(a.Server)
 }
 
 // createCmd represents the create command
@@ -80,14 +62,5 @@ var createCmd = &cobra.Command{
 func init() {
 	allianceCmd.AddCommand(createCmd)
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// createCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// createCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	createCmd.Flags().StringVarP(&infile, "inputfile", "i", "", "JSON file to create an allaince")
 }

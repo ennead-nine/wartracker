@@ -22,41 +22,46 @@ THE SOFTWARE.
 package commandercmd
 
 import (
-	"database/sql"
 	"fmt"
 	"wartracker/pkg/commander"
 
 	"github.com/spf13/cobra"
 )
 
-func CreateCommander() error {
+func GetCommander() error {
 	var c commander.Commander
+	var o []byte
+	var err error
 
-	err := ReadCommanderJSON(&c)
+	if id != "" {
+		err = c.GetById(id)
+	} else if notename != "" {
+		err = c.GetByNoteName(notename)
+	}
 	if err != nil {
 		return err
 	}
 
-	err = c.GetByNoteName(c.NoteName)
-	if err == nil {
-		return fmt.Errorf("commander \"%s\" already exists", c.NoteName)
-	} else {
-		if err == sql.ErrNoRows {
-			return c.Create(server)
-		} else {
-			return err
-		}
+	o, err = c.CommanderToJSON()
+	if err != nil {
+		return err
 	}
+	fmt.Println(string(o))
+
+	return nil
 }
 
-// createCmd represents the create command
-var createCmd = &cobra.Command{
-	Use:   "create",
-	Short: "Create a commander from a JSON file",
-	Long: `Builds a commander object from a JSON file created from "scan".  If 
-	the alliance already exists, data is added to the database for today's date.`,
+// scanCmd represents the scan command
+var getCmd = &cobra.Command{
+	Use:   "get",
+	Short: "Scans an alliance screenshot into a json file.",
+	Long: `Scan takes an alliance screenshot and Marshals an alliance object 
+	into json for cleanup.  Running wartracjer-cli alliance create with the 
+	cleaned json will create an alliance object in the database.
+	
+	Example: wartracker-cli alliance scan -i alliance.png`,
 	Run: func(cmd *cobra.Command, args []string) {
-		err := CreateCommander()
+		err := GetCommander()
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -64,8 +69,10 @@ var createCmd = &cobra.Command{
 }
 
 func init() {
-	commanderCmd.AddCommand(createCmd)
+	commanderCmd.AddCommand(getCmd)
 
-	createCmd.Flags().StringVarP(&infile, "inputfile", "i", "", "JSON file to create a commander")
-	createCmd.Flags().Int64VarP(&server, "server", "s", 0, "Commander's server number")
+	getCmd.Flags().StringVarP(&id, "id", "i", "", "Commander's wartracker ID")
+	getCmd.Flags().StringVarP(&notename, "notename", "t", "", "Commander's in game notename")
+	getCmd.MarkFlagsOneRequired("id", "notename")
+	getCmd.MarkFlagsMutuallyExclusive("id", "notename")
 }

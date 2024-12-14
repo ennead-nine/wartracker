@@ -22,10 +22,12 @@ THE SOFTWARE.
 package commandercmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"wartracker/cmd/wartracker-cli/cmd"
+	"wartracker/pkg/commander"
 	"wartracker/pkg/scanner"
 
 	"github.com/spf13/cobra"
@@ -64,11 +66,11 @@ func init() {
 
 var (
 	// Common flag variables
-	infile  string
-	outfile string
-	server  int64
-	//	id      string
-	//	tag     string
+	infile   string
+	outfile  string
+	server   int64
+	id       string
+	notename string
 
 	Imm scanner.ImageMaps
 )
@@ -91,4 +93,19 @@ func initImageMaps(m string) {
 	if err != nil {
 		fmt.Println(err)
 	}
+}
+
+func ReadCommanderJSON(c *commander.Commander) error {
+	in, err := os.Open(infile)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	jf, err := io.ReadAll(in)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(jf, c)
 }

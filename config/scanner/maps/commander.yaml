@@ -70,3 +70,15 @@ proflevel:
         gray: false
         invert: false
         bg: false
+likes:
+    rect:
+        px: 149
+        py: 994
+        rx: 141
+        ry: 60
+    charfilter:
+        filter: "0123456789"
+    preprocess:
+        gray: false
+        invert: false
+        bg: false

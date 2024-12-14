@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 	"wartracker/cmd/wartracker-cli/cmd"
 	"wartracker/pkg/alliance"
 	"wartracker/pkg/commander"
@@ -52,10 +53,10 @@ func ScanCommander() (*commander.Commander, error) {
 	for k, im := range Imm {
 		switch k {
 		case "pfp":
-			if cmd.Debug {
-				fmt.Printf("scanning %s...\n", k)
-			}
-			d.PFP, err = im.ProcessImage(img)
+		//			if cmd.Debug {
+		//				fmt.Printf("scanning %s...\n", k)
+		//			}
+		//			d.PFP, err = im.ProcessImage(img)
 		case "hqlevel":
 			if cmd.Debug {
 				fmt.Printf("scanning %s...\n", k)
@@ -92,6 +93,11 @@ func ScanCommander() (*commander.Commander, error) {
 				fmt.Printf("scanning %s...\n", k)
 			}
 			d.ProfessionLevel, err = im.ProcessImageInt(img)
+		case "likes":
+			if cmd.Debug {
+				fmt.Printf("scanning %s...\n", k)
+			}
+			d.Likes, err = im.ProcessImageInt(img)
 		default:
 			return nil, fmt.Errorf("invalid key \"%s\" in map configuration", k)
 		}
@@ -103,10 +109,23 @@ func ScanCommander() (*commander.Commander, error) {
 	if a.Id == "" {
 		fmt.Printf("Commander's alliance [%s] does not exist in the database\n", tag)
 	} else {
-		fmt.Printf("Associating commander with [%s]%s", tag, a.Data[0].Name)
+		fmt.Printf("Associating commander with [%s]%s\n", tag, a.Data[0].Name)
 	}
 
+	err = c.GetByNoteName(c.NoteName)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			fmt.Printf("Commander does not exist.  Please use \"wartracker-cli commander create -i %s -s [server]\" to create.\n", outfile)
+		} else {
+			return nil, err
+		}
+	} else {
+		fmt.Printf("Commander does exists.  Please use \"wartracker-cli commander update -i %s -s [server]\" to update.\n", outfile)
+	}
+
+	d.Date = time.Now().Format(time.DateOnly)
 	c.Data = append(c.Data, d)
+	c.Data = c.Data[1:]
 
 	j, err := c.CommanderToJSON()
 	if err != nil {
@@ -141,15 +160,6 @@ var scanCmd = &cobra.Command{
 func init() {
 	commanderCmd.AddCommand(scanCmd)
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// canmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// scanCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	scanCmd.Flags().StringVarP(&infile, "image", "i", "", "image file (PNG) to scan for commander data")
 	scanCmd.MarkFlagRequired("image")
 	scanCmd.MarkFlagFilename("image")

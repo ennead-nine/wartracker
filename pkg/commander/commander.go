@@ -12,7 +12,7 @@ import (
 type Commander struct {
 	Id       string `json:"id" yaml:"id" db:"id"`
 	NoteName string `json:"note-name" yaml:"noteName" db:"note_name"`
-	Data     []Data
+	Data     []Data `json:"data" yaml:"data"`
 }
 
 type Data struct {
@@ -28,7 +28,7 @@ type Data struct {
 	CommanderID     string `json:"commander-id" yaml:"commanderId" db:"commander_id"`
 }
 
-func (c *Commander) Add(server int64) error {
+func (c *Commander) Create(server int64) error {
 	var w wtid.WTID
 	w.New("wartracker", "commander", server)
 	c.Id = w.Id
@@ -38,6 +38,7 @@ func (c *Commander) Add(server int64) error {
 	if err != nil {
 		return err
 	}
+
 	res, err := tx.Exec("INSERT INTO commander (id, note_name) VALUES (?, ?)",
 		c.Id,
 		c.NoteName)
@@ -60,7 +61,54 @@ func (c *Commander) Add(server int64) error {
 	if err != nil {
 		return err
 	}
-	res, err = tx.Exec("INSERT INTO commander_data (date, hq_level, pfp, likes, hq_power, kills, profession_level, total_hero_power, alliance_id, commander_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+	res, err = tx.Exec(`INSERT INTO commander_data (
+		date, 
+		hq_level, 
+		likes, 
+		hq_power, 
+		kills, 
+		profession_level, 
+		total_hero_power, 
+		alliance_id,
+		commander_id
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		c.Data[0].Date,
+		c.Data[0].HQLevel,
+		c.Data[0].Likes,
+		c.Data[0].HQPower,
+		c.Data[0].Kills,
+		c.Data[0].ProfessionLevel,
+		c.Data[0].TotalHeroPower,
+		c.Data[0].AllianceID,
+		c.Data[0].CommanderID)
+	if err != nil {
+		return err
+	}
+	x, err = res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if x != 1 {
+		return fmt.Errorf("failed to insert commander data")
+	}
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Commander) Update() error {
+	if len(c.Data) < 1 {
+		return fmt.Errorf("data for commander [%s] is empty", c.NoteName)
+	}
+	tx, err := db.Connection.Begin()
+	if err != nil {
+		return err
+	}
+
+	res, err := tx.Exec("INSERT INTO commander_data (date, hq_level, pfp, likes, hq_power, kills, profession_level, total_hero_power, alliance_id, commander_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		c.Data[0].Date,
 		c.Data[0].PFP,
 		c.Data[0].HQLevel,
@@ -74,7 +122,7 @@ func (c *Commander) Add(server int64) error {
 	if err != nil {
 		return err
 	}
-	x, err = res.RowsAffected()
+	x, err := res.RowsAffected()
 	if err != nil {
 		return err
 	}
@@ -96,7 +144,6 @@ func (c *Commander) GetById(id string) error {
 	}
 
 	rows, err := db.Connection.Queryx("SELECT * FROM commander_data WHERE commander_id=? ORDER BY date DESC", id)
-
 	if err != nil {
 		return err
 	}
@@ -115,7 +162,7 @@ func (c *Commander) GetById(id string) error {
 func (c *Commander) GetByNoteName(n string) error {
 	var id string
 
-	err := db.Connection.QueryRowx("SELECT commander_id FROM commander WHERE note_name=? ORDER BY date DESC LIMIT 1", n).Scan(&id)
+	err := db.Connection.QueryRowx("SELECT id FROM commander WHERE note_name=?", n).Scan(&id)
 	if err != nil {
 		return err
 	}

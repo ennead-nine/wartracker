@@ -19,44 +19,44 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-package commandercmd
+package alliancecmd
 
 import (
 	"database/sql"
 	"fmt"
-	"wartracker/pkg/commander"
+	"wartracker/pkg/alliance"
 
 	"github.com/spf13/cobra"
 )
 
-func CreateCommander() error {
-	var c commander.Commander
+func UpdateAlliance() error {
+	var a alliance.Alliance
 
-	err := ReadCommanderJSON(&c)
+	err := ReadAllianceJSON(&a)
 	if err != nil {
 		return err
 	}
 
-	err = c.GetByNoteName(c.NoteName)
-	if err == nil {
-		return fmt.Errorf("commander \"%s\" already exists", c.NoteName)
-	} else {
+	err = a.GetById(a.Id)
+	if err != nil {
 		if err == sql.ErrNoRows {
-			return c.Create(server)
+			return fmt.Errorf("alliance [%s] does not exist", a.Data[0].Name)
 		} else {
 			return err
 		}
 	}
+
+	return a.Update()
 }
 
 // createCmd represents the create command
-var createCmd = &cobra.Command{
-	Use:   "create",
-	Short: "Create a commander from a JSON file",
-	Long: `Builds a commander object from a JSON file created from "scan".  If 
-	the alliance already exists, data is added to the database for today's date.`,
+var updateCmd = &cobra.Command{
+	Use:   "update",
+	Short: "Update commander data from a JSON file",
+	Long: `Builds an object for an existing commander from a JSON file created 
+	from "scan" and adds the data to the database.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		err := CreateCommander()
+		err := UpdateAlliance()
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -64,8 +64,7 @@ var createCmd = &cobra.Command{
 }
 
 func init() {
-	commanderCmd.AddCommand(createCmd)
+	allianceCmd.AddCommand(updateCmd)
 
-	createCmd.Flags().StringVarP(&infile, "inputfile", "i", "", "JSON file to create a commander")
-	createCmd.Flags().Int64VarP(&server, "server", "s", 0, "Commander's server number")
+	updateCmd.Flags().StringVarP(&infile, "inputfile", "i", "", "JSON file to create a commander")
 }

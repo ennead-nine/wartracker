@@ -12,7 +12,7 @@ import (
 type Alliance struct {
 	Id     string `json:"id" yaml:"id" db:"id"`
 	Server int64  `json:"server" yaml:"server" db:"server"`
-	Data   []Data
+	Data   []Data `json:"data" yaml:"data"`
 }
 
 type Data struct {
@@ -27,7 +27,7 @@ type Data struct {
 }
 
 // Adds and alliance to the database
-func (a *Alliance) Add(server int64) error {
+func (a *Alliance) Create(server int64) error {
 	var w wtid.WTID
 	w.New("wartracker", "alliance", server)
 	a.Id = w.Id
@@ -72,6 +72,38 @@ func (a *Alliance) Add(server int64) error {
 		return err
 	}
 	x, err = res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if x != 1 {
+		return fmt.Errorf("failed to insert alliance data")
+	}
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (a *Alliance) Update() error {
+	tx, err := db.Connection.Begin()
+	if err != nil {
+		return err
+	}
+	res, err := tx.Exec("INSERT INTO alliance_data (name, tag, date, power, gift_level, member_count, r5_id, alliance_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		a.Data[0].Name,
+		a.Data[0].Tag,
+		a.Data[0].Date,
+		a.Data[0].Power,
+		a.Data[0].GiftLevel,
+		a.Data[0].MemberCount,
+		a.Data[0].R5Id,
+		a.Id)
+	if err != nil {
+		return err
+	}
+	x, err := res.RowsAffected()
 	if err != nil {
 		return err
 	}

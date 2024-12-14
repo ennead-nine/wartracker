@@ -22,11 +22,13 @@ THE SOFTWARE.
 package alliancecmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 
 	"wartracker/cmd/wartracker-cli/cmd"
+	"wartracker/pkg/alliance"
 	"wartracker/pkg/scanner"
 
 	"github.com/spf13/cobra"
@@ -92,4 +94,19 @@ func initImageMaps(m string) {
 	if err != nil {
 		fmt.Println(err)
 	}
+}
+
+func ReadAllianceJSON(a *alliance.Alliance) error {
+	in, err := os.Open(infile)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	jf, err := io.ReadAll(in)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(jf, a)
 }

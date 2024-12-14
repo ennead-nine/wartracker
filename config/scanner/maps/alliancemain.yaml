@@ -17,7 +17,7 @@ membercount:
         rx: 145
         ry: 70
     charfilter:
-        filter: "0123456789"
+        filter: "/0123456789"
     preprocess:
         gray: false
         invert: false

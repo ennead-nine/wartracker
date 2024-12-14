@@ -150,9 +150,9 @@ var scanmainCmd = &cobra.Command{
 func init() {
 	allianceCmd.AddCommand(scanmainCmd)
 
-	scanmainCmd.Flags().StringVarP(&infile, "mainImage", "m", "", "Image file with main alliance info (PNG) to scan for alliance data")
-	scanmainCmd.Flags().StringVarP(&giftfile, "giftImage", "g", "", "Image file with alliance gift info (PNG) to scan for alliance data")
+	scanmainCmd.Flags().StringVarP(&infile, "mainimage", "i", "", "Image file with main alliance info (PNG) to scan for alliance data")
+	scanmainCmd.Flags().StringVarP(&giftfile, "giftimage", "g", "", "Image file with alliance gift info (PNG) to scan for alliance data")
 	scanmainCmd.Flags().StringVarP(&outfile, "output", "o", "", "JSON file to output alliance data to")
-	scanmainCmd.Flags().Int64VarP(&server, "server", "s", 1, "Alliance's server number")
+	scanmainCmd.Flags().Int64VarP(&server, "server", "s", 0, "Alliance's server number")
 
 }
