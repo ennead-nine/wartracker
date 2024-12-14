@@ -108,7 +108,7 @@ func (c *Commander) Update() error {
 		return err
 	}
 
-	res, err := tx.Exec("INSERT INTO commander_data (date, hq_level, pfp, likes, hq_power, kills, profession_level, total_hero_power, alliance_id, commander_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+	res, err := tx.Exec("INSERT INTO commander_data (date, pfp, hq_level, likes, hq_power, kills, profession_level, total_hero_power, alliance_id, commander_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		c.Data[0].Date,
 		c.Data[0].PFP,
 		c.Data[0].HQLevel,

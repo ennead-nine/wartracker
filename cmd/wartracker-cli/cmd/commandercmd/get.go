@@ -72,7 +72,7 @@ func init() {
 	commanderCmd.AddCommand(getCmd)
 
 	getCmd.Flags().StringVarP(&id, "id", "i", "", "Commander's wartracker ID")
-	getCmd.Flags().StringVarP(&notename, "notename", "t", "", "Commander's in game notename")
+	getCmd.Flags().StringVarP(&notename, "notename", "n", "", "Commander's in game notename")
 	getCmd.MarkFlagsOneRequired("id", "notename")
 	getCmd.MarkFlagsMutuallyExclusive("id", "notename")
 }
