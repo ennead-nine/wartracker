@@ -22,67 +22,13 @@ THE SOFTWARE.
 package vsduelcmd
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
-	"os"
-	"wartracker/cmd/wartracker-cli/cmd"
-	"wartracker/pkg/scanner"
 	"wartracker/pkg/vsduel"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-	"gopkg.in/yaml.v3"
 )
 
-var (
-	// Common flag variables
-	infile  string
-	outfile string
-	id      string
-	dow     string
-
-	Imm scanner.ImageMaps
-)
-
-func initImageMaps(m string) {
-	Imm = make(scanner.ImageMaps)
-
-	in, err := os.Open(fmt.Sprintf("%s/%s.yaml", viper.GetString("mapdir"), m))
-	if err != nil {
-		fmt.Println(err)
-	}
-	defer in.Close()
-
-	yf, err := io.ReadAll(in)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	err = yaml.Unmarshal(yf, Imm)
-	if err != nil {
-		fmt.Println(err)
-	}
-}
-
-func ReadDuelJSON(v *vsduel.Duel) error {
-	in, err := os.Open(infile)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	jf, err := io.ReadAll(in)
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(jf, v)
-}
-
-// vsduelCmd represents the vsduel command
-var vsduelCmd = &cobra.Command{
-	Use:   "vsduel",
+var initCmd = &cobra.Command{
+	Use:   "init",
 	Short: "A brief description of your command",
 	Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
@@ -91,20 +37,11 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("vsduel called")
+		err := vsduel.InitDays()
+		cobra.CheckErr(err)
 	},
 }
 
 func init() {
-	cmd.RootCmd.AddCommand(vsduelCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// vsduelCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// vsduelCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	vsduelCmd.AddCommand(initCmd)
 }

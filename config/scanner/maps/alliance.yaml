@@ -1,9 +1,9 @@
 giftlevel:
     rect:
-        px: 356
-        py: 351
-        rx: 19
-        ry: 15
+        px: 700
+        py: 834
+        rx: 195
+        ry: 42
     charfilter:
         filter: "0123456789"
     preprocess:
@@ -12,10 +12,10 @@ giftlevel:
         bg: true
 membercount:
     rect:
-        px: 316
-        py: 366
-        rx: 28
-        ry: 16
+        px: 762
+        py: 864
+        rx: 60
+        ry: 48
     charfilter:
         filter: "0123456789"
     preprocess:
@@ -24,10 +24,10 @@ membercount:
         bg: true
 name:
     rect:
-        px: 204
-        py: 290
-        rx: 160
-        ry: 24
+        px: 486
+        py: 681
+        rx: 378
+        ry: 66
     charfilter:
         filter: 0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
     preprocess:
@@ -36,10 +36,10 @@ name:
         bg: false
 power:
     rect:
-        px: 280
-        py: 317
-        rx: 96
-        ry: 18
+        px: 582
+        py: 756
+        rx: 324
+        ry: 42
     charfilter:
         filter: "0123456789"
     preprocess:
@@ -48,10 +48,10 @@ power:
         bg: true
 tag:
     rect:
-        px: 157
-        py: 292
-        rx: 48
-        ry: 20
+        px: 360
+        py: 687
+        rx: 132
+        ry: 63
     charfilter:
         filter: 0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
     preprocess:

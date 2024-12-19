@@ -26,6 +26,7 @@ import (
 	"os"
 	"wartracker/pkg/db"
 	"wartracker/pkg/scanner"
+	"wartracker/pkg/vsduel"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -40,6 +41,7 @@ var (
 	TessdataDir string
 	Languages   []string
 	MapDir      string
+	DayFile     string
 )
 
 // RootCmd represents the base command when called without any subcommands
@@ -76,18 +78,21 @@ func init() {
 	RootCmd.PersistentFlags().StringVar(&TessdataDir, "tessdata", "", "Tesseract data directory")
 	RootCmd.PersistentFlags().StringSliceVar(&Languages, "languages", nil, "Tesseract languages to use")
 	RootCmd.PersistentFlags().StringVar(&MapDir, "mapdir", "", "Directory for command maps")
+	RootCmd.PersistentFlags().StringVar(&DayFile, "dayfile", "", "YAML file with vs day data")
 	cobra.CheckErr(viper.BindPFlag("dbfile", RootCmd.PersistentFlags().Lookup("dbfile")))
 	cobra.CheckErr(viper.BindPFlag("scratch", RootCmd.PersistentFlags().Lookup("scratch")))
 	cobra.CheckErr(viper.BindPFlag("debug", RootCmd.PersistentFlags().Lookup("debug")))
 	cobra.CheckErr(viper.BindPFlag("tessdata", RootCmd.PersistentFlags().Lookup("tessdata")))
 	cobra.CheckErr(viper.BindPFlag("languages", RootCmd.PersistentFlags().Lookup("languages")))
 	cobra.CheckErr(viper.BindPFlag("mapdir", RootCmd.PersistentFlags().Lookup("mapdir")))
+	cobra.CheckErr(viper.BindPFlag("dayfile", RootCmd.PersistentFlags().Lookup("dayfile")))
 	viper.SetDefault("dbfile", "db/wartracker.db")
 	viper.SetDefault("scratch", "_scratch")
 	viper.SetDefault("debug", false)
 	viper.SetDefault("tessdata", "/Users/erumer/src/github.com/tesseract-ocr/tessdata")
 	viper.SetDefault("languages", nil)
 	viper.SetDefault("mapdir", "config/scanner/maps")
+	viper.SetDefault("dayfile", "config/vsduel/data/days.yaml")
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -119,6 +124,7 @@ func initConfig() {
 	initLanguages()
 	initMapDir()
 	initTessdataDir()
+	initDayFile()
 }
 
 func initDB() {
@@ -139,6 +145,8 @@ func initScratch() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Unable to initialize scratch directory: ", Scratch)
 	}
+
+	scanner.ScratchDir = Scratch
 }
 
 func initDebug() {
@@ -163,4 +171,9 @@ func initLanguages() {
 
 func initMapDir() {
 	MapDir = viper.GetString("mapdir")
+}
+
+func initDayFile() {
+	DayFile = viper.GetString("dayfile")
+	vsduel.DayFile = DayFile
 }

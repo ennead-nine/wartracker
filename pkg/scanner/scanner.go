@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"image/draw"
 	"image/png"
 	"math"
 	"os"
@@ -94,17 +93,15 @@ func PreProcessImage(img image.Image, gray, invert, bg bool) (image.Image, error
 		ppimg = imaging.Invert(ppimg)
 	}
 	if bg {
-		cimg := image.NewRGBA(ppimg.Bounds())
-		draw.Draw(cimg, ppimg.Bounds(), ppimg, image.Point{}, draw.Over)
-		fullrect := ppimg.Bounds()
-		for x := fullrect.Min.X; x <= fullrect.Max.X; x++ {
-			for y := fullrect.Min.Y; y <= fullrect.Max.Y; y++ {
-				r1, _, _, _ := cimg.At(x, y).RGBA()
-
-				if r1 >= 64 {
-					cimg.Set(x, y, color.RGBA{255, 255, 255, 255})
+		cimg := image.NewGray(ppimg.Bounds())
+		for x := ppimg.Bounds().Min.X; x <= ppimg.Bounds().Max.X-1; x++ {
+			for y := ppimg.Bounds().Min.Y; y <= ppimg.Bounds().Max.Y-1; y++ {
+				c := ppimg.At(x, y)
+				r1, _, _, _ := c.RGBA()
+				if r1 >= 40000 {
+					cimg.Set(x, y, color.Gray{255})
 				} else {
-					cimg.Set(x, y, color.RGBA{0, 0, 0, 255})
+					cimg.Set(x, y, color.Gray{0})
 				}
 			}
 		}

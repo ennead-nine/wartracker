@@ -22,63 +22,49 @@ THE SOFTWARE.
 package vsduelcmd
 
 import (
-	"os"
+	"database/sql"
+	"fmt"
 	"wartracker/pkg/vsduel"
 
 	"github.com/spf13/cobra"
 )
 
-var (
-	date   string
-	week   int64
-	league string
-)
+func UpdateDuel() error {
+	var v vsduel.Duel
 
-func CreateDuel() error {
-	var d vsduel.Duel
-
-	d.Date = date
-	d.League = league
-	d.Week = week
-
-	err := d.Create()
+	err := ReadDuelJSON(&v)
 	if err != nil {
 		return err
 	}
 
-	j, err := d.DuelToJSON()
+	err = v.GetById(v.Id)
 	if err != nil {
-		return err
-	}
-	err = os.WriteFile(outfile, j, 0644)
-	if err != nil {
-		return err
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("vsduel [%s] does not exist", v.Id)
+		} else {
+			return err
+		}
 	}
 
-	return err
+	return v.Update()
 }
 
 // createCmd represents the create command
-var createCmd = &cobra.Command{
-	Use:   "create",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+var updateCmd = &cobra.Command{
+	Use:   "update",
+	Short: "Update commander data from a JSON file",
+	Long: `Builds an object for an existing commander from a JSON file created 
+	from "scan" and adds the data to the database.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		err := CreateDuel()
-		cobra.CheckErr(err)
+		err := UpdateDuel()
+		if err != nil {
+			fmt.Println(err)
+		}
 	},
 }
 
 func init() {
-	vsduelCmd.AddCommand(createCmd)
+	vsduelCmd.AddCommand(updateCmd)
 
-	createCmd.Flags().StringVarP(&date, "date", "d", "", "Date the duel start in MM-DD-YYYY format")
-	createCmd.Flags().StringVarP(&league, "league", "l", "", "The level of the duel league")
-	createCmd.Flags().Int64VarP(&week, "week", "w", 0, "Duel league week")
-	createCmd.Flags().StringVarP(&outfile, "outfile", "o", "", "Output file")
+	updateCmd.Flags().StringVarP(&infile, "inputfile", "i", "", "JSON file to update a versus duel")
 }

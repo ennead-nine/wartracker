@@ -1,6 +1,7 @@
 package wtid
 
 import (
+	"fmt"
 	"regexp"
 	"strconv"
 
@@ -44,4 +45,32 @@ func (wtid *WTID) Parse(id string) error {
 	wtid.UUID = fields[3]
 
 	return nil
+}
+
+func Validate(id string) error {
+	var w WTID
+
+	err := w.Parse(id)
+	if err != nil {
+		return err
+	}
+	if w.Org != "wartracker" {
+		return fmt.Errorf("invalid org in id")
+	}
+	_, err = uuid.Parse(w.Id)
+	if err != nil {
+		return err
+	}
+	switch w.Resource {
+	case "alliance":
+		return nil
+	case "commander":
+		return nil
+	case "vsday":
+		return nil
+	case "vsduel":
+		return nil
+	default:
+		return fmt.Errorf("invalid rresource in id")
+	}
 }

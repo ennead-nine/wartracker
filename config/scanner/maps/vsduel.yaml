@@ -1,0 +1,24 @@
+left:
+    rect:
+        px: 81
+        py: 1425
+        rx: 408
+        ry: 54
+    charfilter:
+        filter: "[]0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    preprocess:
+        gray: true
+        invert: false
+        bg: true
+right:
+    rect:
+        px: 534
+        py: 1422
+        rx: 393
+        ry: 60
+    charfilter:
+        filter: "[]0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    preprocess:
+        gray: true
+        invert: false
+        bg: true

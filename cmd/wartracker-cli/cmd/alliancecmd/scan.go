@@ -70,8 +70,6 @@ func ScanAlliance() (*alliance.Alliance, error) {
 	}
 
 	d.Date = time.Now().Format(time.DateOnly)
-	a.Data = append(a.Data, d)
-	a.Data = a.Data[1:]
 	a.Server = server
 
 	err = a.GetByTag(d.Tag)
@@ -84,7 +82,10 @@ func ScanAlliance() (*alliance.Alliance, error) {
 		fmt.Printf("This alliance already exists. To add the new data run 'wartracker-cli alliance add -o %s' to add the new data.\n", outfile)
 	}
 
-	a.Data = a.Data[:1]
+	if len(a.Data) > 0 {
+		a.Data = a.Data[:1]
+	}
+	a.Data = append(a.Data, d)
 
 	j, err := json.MarshalIndent(a, "", "\t")
 	if err != nil {
