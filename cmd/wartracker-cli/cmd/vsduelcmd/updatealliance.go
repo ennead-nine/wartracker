@@ -22,26 +22,43 @@ THE SOFTWARE.
 package vsduelcmd
 
 import (
+	"fmt"
 	"wartracker/pkg/vsduel"
 
 	"github.com/spf13/cobra"
 )
 
-var initCmd = &cobra.Command{
-	Use:   "init",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+func UpdateAllianceData() error {
+	var v vsduel.VsDuel
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	err := ReadDuelJSON(&v)
+	if err != nil {
+		return err
+	}
+
+	for _, dd := range v.VsDuelDataMap {
+		err = v.UpsertAllianceData(dd.Id)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// createCmd represents the create command
+var updateAllianceCmd = &cobra.Command{
+	Use:   "update",
+	Short: "Update alliance data from a JSON file",
+	Long: `Builds an object for an existing commander from a JSON file created 
+	from "scan" and adds the data to the database.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		err := vsduel.InitDays()
-		cobra.CheckErr(err)
+		err := UpdateAllianceData()
+		if err != nil {
+			fmt.Println(err)
+		}
 	},
 }
 
 func init() {
-	vsduelCmd.AddCommand(initCmd)
+	vsduelCmd.AddCommand(updateAllianceCmd)
 }

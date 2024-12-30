@@ -1,0 +1,5 @@
+dbfile: db/wartracker.db
+scratch: _scratch
+tessdata: /Users/erumer/src/github.com/tesseract-ocr/tessdata
+mapdir: config/scanner/maps
+languages:

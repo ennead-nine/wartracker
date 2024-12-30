@@ -36,23 +36,27 @@ import (
 
 // ScanCommander processes the given image file and scans it with tessaract
 // into an commander.Commander struct
-func ScanVSDuel() (*vsduel.Duel, error) {
-	var v vsduel.Duel
-	var a alliance.Alliance
-	var dl vsduel.DuelData
-	var dr vsduel.DuelData
-	var days vsduel.Days
-
+func ScanVSDuel() (*vsduel.VsDuel, error) {
+	var v vsduel.VsDuel
 	err := v.GetById(id)
 	if err != nil {
 		return nil, err
 	}
-	dl.DuelId = v.Id
-	dr.DuelId = v.Id
+
+	var did string
+	days, err := vsduel.GetDays()
+	if err != nil {
+		return nil, err
+	}
+	for id, d := range v.VsDuelDataMap {
+		if d.VsDuelDayId == days[dow].Id {
+			did = id
+		}
+	}
 
 	initImageMaps("vsduel")
 
-	img, err := scanner.SetImageDensity(infile, 300)
+	img, err := scanner.SetImageDensity(inputFile, 300)
 	if err != nil {
 		return nil, err
 	}
@@ -60,6 +64,9 @@ func ScanVSDuel() (*vsduel.Duel, error) {
 	for k, im := range Imm {
 		switch k {
 		case "left":
+			var a alliance.Alliance
+			var ad vsduel.VsAllianceData
+
 			if cmd.Debug {
 				fmt.Printf("scanning %s...\n", k)
 			}
@@ -79,13 +86,21 @@ func ScanVSDuel() (*vsduel.Duel, error) {
 			if err != nil {
 				return nil, err
 			}
-			dl.AllianceID = a.Id
+			ad.AllianceId = a.Id
+			ad.Tag = tag
+
 			p, err := strconv.Atoi(names[1])
 			if err != nil {
 				return nil, err
 			}
-			dl.Points = int64(p)
+			ad.Points = p
+			ad.VsDuelDataId = did
+
+			v.VsDuelDataMap[did].VsAllianceDataMap[a.Id] = ad
 		case "right":
+			var a alliance.Alliance
+			var ad vsduel.VsAllianceData
+
 			if cmd.Debug {
 				fmt.Printf("scanning %s...\n", k)
 			}
@@ -105,37 +120,26 @@ func ScanVSDuel() (*vsduel.Duel, error) {
 			if err != nil {
 				return nil, err
 			}
-			dr.AllianceID = a.Id
+			ad.AllianceId = a.Id
+			ad.Tag = tag
+
 			p, err := strconv.Atoi(names[0])
 			if err != nil {
 				return nil, err
 			}
-			dr.Points = int64(p)
+			ad.Points = p
+
+			v.VsDuelDataMap[did].VsAllianceDataMap[a.Id] = ad
 		default:
 			return nil, fmt.Errorf("invalid key \"%s\" in map configuration", k)
 		}
 	}
 
-	days, err = vsduel.GetDays()
-	if err != nil {
-		return nil, err
-	}
-	for _, d := range days {
-		if d.DayOfWeek == dow {
-			dl.DayID = d.Id
-			dr.DayID = d.Id
-			break
-		}
-	}
-
-	v.DuelData = append(v.DuelData, dl)
-	v.DuelData = append(v.DuelData, dr)
-
 	j, err := v.DuelToJSON()
 	if err != nil {
 		return nil, err
 	}
-	err = os.WriteFile(outfile, j, 0644)
+	err = os.WriteFile(outputFile, j, 0644)
 	if err != nil {
 		return nil, err
 	}
@@ -144,13 +148,15 @@ func ScanVSDuel() (*vsduel.Duel, error) {
 }
 
 // scanCmd represents the scan command
-var scanCmd = &cobra.Command{
-	Use:   "scan",
-	Short: "Scans a commander screenshot into a json file.",
-	Long: `Scan takes an cammander screenshot pareses it into numbers and 
-	text, places it in a commander object, then marshals it into json for 
-	cleanup.  Running wartracker-cli commander create with the cleaned json 
-	will create an commander object in the database.
+var scanAllianceCmd = &cobra.Command{
+	Use:   "scanAlliance",
+	Short: "Scans an alliance versus duel day screenshot into a json file.",
+	Long: `Scan takes an alliance versus deul daily screenshot and pareses it 
+	into numbers and text, places it in an aliiance versus data object, then 
+	marshals it into json for cleanup.  
+	
+	Running "wartracker-cli vsduel addAliiance" with the cleaned json 
+	will create an alliance versus duel data object in the database.
 	
 	Example: wartracker-cli commander scan -i commander.png -o commander.json`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -162,16 +168,8 @@ var scanCmd = &cobra.Command{
 }
 
 func init() {
-	vsduelCmd.AddCommand(scanCmd)
+	vsduelCmd.AddCommand(scanAllianceCmd)
 
-	scanCmd.Flags().StringVarP(&infile, "image", "i", "", "image file (PNG) to scan for duel data")
-	scanCmd.MarkFlagRequired("image")
-	scanCmd.MarkFlagFilename("image")
-	scanCmd.Flags().StringVarP(&outfile, "output", "o", "", "JSON file to output duel data to")
-	scanCmd.MarkFlagRequired("output")
-	scanCmd.MarkFlagFilename("output")
-	scanCmd.Flags().StringVarP(&id, "id", "v", "", "VS Duel ID")
-	scanCmd.MarkFlagRequired("id")
-	scanCmd.Flags().StringVarP(&dow, "dow", "d", "", "VS Duel Day")
-	scanCmd.MarkFlagRequired("dow")
+	scanAllianceCmd.Flags().StringVarP(&dow, "dow", "d", "", "VS Duel Day")
+	scanAllianceCmd.MarkFlagRequired("dow")
 }

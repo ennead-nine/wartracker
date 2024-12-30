@@ -53,24 +53,21 @@ to quickly create a Cobra application.`,
 func init() {
 	cmd.RootCmd.AddCommand(commanderCmd)
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// commanderCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// commanderCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	commanderCmd.PersistentFlags().StringVar(&inputFile, "inputfile", "", "File with vs day data")
+	commanderCmd.MarkPersistentFlagFilename("inputfile")
+	commanderCmd.PersistentFlags().StringVar(&outputFile, "outputfile", "", "YAML file with vs day data")
+	commanderCmd.MarkPersistentFlagFilename("outputfile")
+	commanderCmd.PersistentFlags().StringVar(&id, "id", "", "Resource ID")
+	commanderCmd.PersistentFlags().StringVar(&name, "name", "", "Resource ID")
+	commanderCmd.PersistentFlags().IntVar(&server, "server", 0, "Resource ID")
 }
 
 var (
-	// Common flag variables
-	infile   string
-	outfile  string
-	server   int64
-	id       string
-	notename string
+	inputFile  string
+	outputFile string
+	id         string
+	name       string
+	server     int
 
 	Imm scanner.ImageMaps
 )
@@ -96,7 +93,7 @@ func initImageMaps(m string) {
 }
 
 func ReadCommanderJSON(c *commander.Commander) error {
-	in, err := os.Open(infile)
+	in, err := os.Open(inputFile)
 	if err != nil {
 		return err
 	}

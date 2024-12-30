@@ -23,9 +23,6 @@ package main
 
 import (
 	"wartracker/cmd/wartracker-cli/cmd"
-	_ "wartracker/cmd/wartracker-cli/cmd/alliancecmd"
-	_ "wartracker/cmd/wartracker-cli/cmd/commandercmd"
-	_ "wartracker/cmd/wartracker-cli/cmd/vsduelcmd"
 )
 
 func main() {

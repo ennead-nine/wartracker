@@ -65,6 +65,4 @@ var updateCmd = &cobra.Command{
 
 func init() {
 	commanderCmd.AddCommand(updateCmd)
-
-	updateCmd.Flags().StringVarP(&infile, "inputfile", "i", "", "JSON file to create a commander")
 }

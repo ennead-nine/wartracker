@@ -29,7 +29,7 @@ nametag:
         rx: 538
         ry: 86
     charfilter:
-        filter: "[]0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        filter: "[]0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ "
     preprocess:
         gray: true
         invert: true

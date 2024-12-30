@@ -54,7 +54,7 @@ type SubImager interface {
 	SubImage(r image.Rectangle) image.Image
 }
 
-func ParseAbbvInt(s string) (int64, error) {
+func ParseAbbvInt(s string) (int, error) {
 	if len(s) < 2 {
 		return 0, fmt.Errorf("length of string \"%s\" is less than 2", s)
 	}
@@ -69,59 +69,171 @@ func ParseAbbvInt(s string) (int64, error) {
 
 	switch unit {
 	case "K":
-		i := int64(math.Round(base * 1000))
+		i := int(math.Round(base * 1000))
 		return i, nil
 	case "M":
-		i := int64(math.Round(base * 1000000))
+		i := int(math.Round(base * 1000000))
 		return i, nil
 	case "G":
-		i := int64(math.Round(base * 1000000000))
+		i := int(math.Round(base * 1000000000))
 		return i, nil
 	default:
-		i := int64(math.Round(base))
+		i := int(math.Round(base))
 		return i, nil
 	}
 }
 
-// PreProcessImage takes an image.Image object and applies filters for optimal OCR
-func PreProcessImage(img image.Image, gray, invert, bg bool) (image.Image, error) {
-	var ppimg = img
-	if gray {
-		ppimg = imaging.Grayscale(img)
-	}
-	if invert {
-		ppimg = imaging.Invert(ppimg)
-	}
-	if bg {
-		cimg := image.NewGray(ppimg.Bounds())
-		for x := ppimg.Bounds().Min.X; x <= ppimg.Bounds().Max.X-1; x++ {
-			for y := ppimg.Bounds().Min.Y; y <= ppimg.Bounds().Max.Y-1; y++ {
-				c := ppimg.At(x, y)
-				r1, _, _, _ := c.RGBA()
-				if r1 >= 40000 {
-					cimg.Set(x, y, color.Gray{255})
-				} else {
-					cimg.Set(x, y, color.Gray{0})
-				}
-			}
-		}
-		ppimg = cimg
-	}
+func grayImage(img image.Image) (image.Image, error) {
+	Process += 1
 
 	if Debug {
-		out, err := os.Create(fmt.Sprintf("%s/debug-%d.png", ScratchDir, Process))
+		out, err := os.Create(fmt.Sprintf("%s/debug-%d-pregrey.png", ScratchDir, Process))
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
-			return ppimg, err
+			return img, err
 		}
-		err = png.Encode(out, ppimg)
+		err = png.Encode(out, img)
 		if err != nil {
 			return nil, err
 		}
-		Process += 1
+		out.Close()
 	}
 
-	return ppimg, nil
+	img = imaging.Grayscale(img)
+
+	if Debug {
+		out, err := os.Create(fmt.Sprintf("%s/debug-%d-postgrey.png", ScratchDir, Process))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return img, err
+		}
+		err = png.Encode(out, img)
+		if err != nil {
+			return nil, err
+		}
+		out.Close()
+	}
+
+	return img, nil
+}
+
+func invertImage(img image.Image) (image.Image, error) {
+	Process += 1
+
+	if Debug {
+		out, err := os.Create(fmt.Sprintf("%s/debug-%d-preinvert.png", ScratchDir, Process))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return img, err
+		}
+		err = png.Encode(out, img)
+		if err != nil {
+			return nil, err
+		}
+		out.Close()
+	}
+
+	img = imaging.Invert(img)
+
+	if Debug {
+		out, err := os.Create(fmt.Sprintf("%s/debug-%d-postinvert.png", ScratchDir, Process))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return img, err
+		}
+		err = png.Encode(out, img)
+		if err != nil {
+			return nil, err
+		}
+		out.Close()
+	}
+
+	return img, nil
+}
+
+func bgImage(img image.Image) (image.Image, error) {
+	Process++
+
+	if Debug {
+		out, err := os.Create(fmt.Sprintf("%s/debug-%d-prebg.png", ScratchDir, Process))
+		if err != nil {
+			return img, err
+		}
+		err = png.Encode(out, img)
+		if err != nil {
+			return nil, err
+		}
+		out.Close()
+	}
+
+	var minR uint32 = 0xffff
+	var minCount int = 0
+	for x := img.Bounds().Min.X; x <= img.Bounds().Max.X-1; x++ {
+		for y := img.Bounds().Min.Y; y <= img.Bounds().Max.Y-1; y++ {
+			c := img.At(x, y)
+			r, _, _, _ := c.RGBA()
+			if r < minR {
+				minR = r
+				minCount++
+			}
+
+		}
+	}
+	if Debug {
+		fmt.Printf("BG:\n\tmincount for %d: %d\n\tmin for %d: %d\n", Process, minCount, Process, minR)
+	}
+	cimg := image.NewRGBA(img.Bounds())
+	for x := img.Bounds().Min.X; x <= img.Bounds().Max.X-1; x++ {
+		for y := img.Bounds().Min.Y; y <= img.Bounds().Max.Y-1; y++ {
+			c := img.At(x, y)
+			r, _, _, _ := c.RGBA()
+			if r == minR {
+				cimg.Set(x, y, color.Black)
+			} else {
+				cimg.Set(x, y, color.White)
+			}
+		}
+	}
+	img = cimg
+
+	if Debug {
+		out, err := os.Create(fmt.Sprintf("%s/debug-%d-postbg.png", ScratchDir, Process))
+		if err != nil {
+			return nil, err
+		}
+		err = png.Encode(out, img)
+		if err != nil {
+			return nil, err
+		}
+		out.Close()
+	}
+
+	return img, nil
+}
+
+// PreProcessImage takes an image.Image object and applies filters for optimal OCR
+func PreProcessImage(img image.Image, gray, invert, bg bool) (image.Image, error) {
+	var err error
+	if gray {
+		img, err = grayImage(img)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if invert {
+		img, err = invertImage(img)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if bg {
+		img, err = bgImage(img)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return img, nil
 }
 
 func SetImageDensity(inFile string, d int) (image.Image, error) {
@@ -174,8 +286,6 @@ func GetImageRect(px, py, rx, ry int, img image.Image) image.Image {
 	r = r.Add(p)
 	newimg = img.(SubImager).SubImage(r)
 
-	fmt.Println(img.Bounds().String())
-
 	return newimg
 }
 
@@ -227,7 +337,7 @@ func (im *ImageMap) ProcessImage(img image.Image) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (im *ImageMap) ProcessImageInt(img image.Image) (int64, error) {
+func (im *ImageMap) ProcessImageInt(img image.Image) (int, error) {
 	img = GetImageRect(im.PX, im.PY, im.RX, im.RY, img)
 	img, err := PreProcessImage(img, im.Gray, im.Invert, im.BG)
 	if err != nil {
@@ -244,10 +354,10 @@ func (im *ImageMap) ProcessImageInt(img image.Image) (int64, error) {
 		return 0, err
 	}
 
-	return int64(i), nil
+	return i, nil
 }
 
-func (im *ImageMap) ProcessImageAbbrInt(img image.Image) (int64, error) {
+func (im *ImageMap) ProcessImageAbbrInt(img image.Image) (int, error) {
 	img = GetImageRect(im.PX, im.PY, im.RX, im.RY, img)
 	img, err := PreProcessImage(img, im.Gray, im.Invert, im.BG)
 	if err != nil {
@@ -264,7 +374,7 @@ func (im *ImageMap) ProcessImageAbbrInt(img image.Image) (int64, error) {
 		return 0, err
 	}
 
-	return int64(i), nil
+	return i, nil
 }
 
 func (im *ImageMap) ProcessImageText(img image.Image) (string, error) {

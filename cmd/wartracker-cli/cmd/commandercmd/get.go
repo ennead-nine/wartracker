@@ -35,8 +35,8 @@ func GetCommander() error {
 
 	if id != "" {
 		err = c.GetById(id)
-	} else if notename != "" {
-		err = c.GetByNoteName(notename)
+	} else if name != "" {
+		err = c.GetByNoteName(name)
 	}
 	if err != nil {
 		return err
@@ -70,9 +70,4 @@ var getCmd = &cobra.Command{
 
 func init() {
 	commanderCmd.AddCommand(getCmd)
-
-	getCmd.Flags().StringVarP(&id, "id", "i", "", "Commander's wartracker ID")
-	getCmd.Flags().StringVarP(&notename, "notename", "n", "", "Commander's in game notename")
-	getCmd.MarkFlagsOneRequired("id", "notename")
-	getCmd.MarkFlagsMutuallyExclusive("id", "notename")
 }

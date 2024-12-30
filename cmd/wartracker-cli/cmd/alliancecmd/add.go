@@ -19,44 +19,43 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-package vsduelcmd
+package alliancecmd
 
 import (
-	"database/sql"
+	"errors"
 	"fmt"
-	"wartracker/pkg/vsduel"
+	"wartracker/pkg/alliance"
 
 	"github.com/spf13/cobra"
 )
 
-func UpdateDuel() error {
-	var v vsduel.Duel
+var (
+	ErrNoData = errors.New("alliancecmd: no data to add to resource")
+)
 
-	err := ReadDuelJSON(&v)
+func AddAllianceData() error {
+	var a alliance.Alliance
+
+	err := ReadAllianceJSON(&a)
 	if err != nil {
 		return err
 	}
 
-	err = v.GetById(v.Id)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return fmt.Errorf("vsduel [%s] does not exist", v.Id)
-		} else {
-			return err
-		}
+	for date := range a.DataMap {
+		return a.AddData(date)
 	}
 
-	return v.Update()
+	return ErrNoData
 }
 
 // createCmd represents the create command
-var updateCmd = &cobra.Command{
-	Use:   "update",
+var addCmd = &cobra.Command{
+	Use:   "add",
 	Short: "Update commander data from a JSON file",
 	Long: `Builds an object for an existing commander from a JSON file created 
 	from "scan" and adds the data to the database.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		err := UpdateDuel()
+		err := AddAllianceData()
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -64,7 +63,5 @@ var updateCmd = &cobra.Command{
 }
 
 func init() {
-	vsduelCmd.AddCommand(updateCmd)
-
-	updateCmd.Flags().StringVarP(&infile, "inputfile", "i", "", "JSON file to update a versus duel")
+	allianceCmd.AddCommand(addCmd)
 }

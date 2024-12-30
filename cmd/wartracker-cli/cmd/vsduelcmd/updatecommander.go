@@ -19,34 +19,40 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-package alliancecmd
+package vsduelcmd
 
 import (
 	"fmt"
-	"wartracker/pkg/alliance"
+	"wartracker/pkg/vsduel"
 
 	"github.com/spf13/cobra"
 )
 
-func UpdateAlliance() error {
-	var a alliance.Alliance
+func UpdateCommanderData() error {
+	var v vsduel.VsDuel
 
-	err := ReadAllianceJSON(&a)
+	err := ReadDuelJSON(&v)
 	if err != nil {
 		return err
 	}
 
-	return a.Update()
+	for _, dd := range v.VsDuelDataMap {
+		err = v.UpsertAllianceData(dd.Id)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // createCmd represents the create command
-var updateCmd = &cobra.Command{
-	Use:   "update",
+var updateCommanderCmd = &cobra.Command{
+	Use:   "updateCommander",
 	Short: "Update commander data from a JSON file",
 	Long: `Builds an object for an existing commander from a JSON file created 
 	from "scan" and adds the data to the database.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		err := UpdateAlliance()
+		err := UpdateCommanderData()
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -54,5 +60,5 @@ var updateCmd = &cobra.Command{
 }
 
 func init() {
-	allianceCmd.AddCommand(updateCmd)
+	vsduelCmd.AddCommand(updateCommanderCmd)
 }

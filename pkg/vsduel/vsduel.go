@@ -11,42 +11,57 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type Duel struct {
-	Id            string          `json:"id" yaml:"id" db:"id"`
-	Date          string          `json:"date" yaml:"date" db:"date"`
-	League        string          `json:"league" yaml:"league" db:"league"`
-	Week          int64           `json:"week" yaml:"week" db:"week"`
-	DuelData      []DuelData      `json:"duel-data" yaml:"duelData"`
-	CommanderData []CommanderData `json:"commander-data" yaml:"commanderData"`
+type VsDuel struct {
+	Id            string `json:"id" yaml:"id" db:"id"`
+	Date          string `json:"date" yaml:"date" db:"date"`
+	League        string `json:"league" yaml:"league" db:"league"`
+	Week          int    `json:"week" yaml:"week" db:"week"`
+	VsDuelDataMap `json:"vsduel-data" yaml:"vsDuelData"`
 }
-type Day struct {
+type VsDay struct {
 	Id        string `json:"id" yaml:"id" db:"id"`
 	Name      string `json:"name" yaml:"name" db:"name"`
 	ShortName string `json:"short-name" yaml:"shortName" db:"short_name"`
 	DayOfWeek string `json:"day-of-week" yaml:"dayOfWeek" db:"day_of_week"`
 }
 
-type DuelData struct {
-	Points     int64  `json:"points" yaml:"points" db:"points"`
-	AllianceID string `json:"alliance-id" yaml:"allianceId" db:"alliance_id"`
-	DuelId     string `json:"duel-id" yaml:"duelId" db:"duel_id"`
-	DayID      string `json:"day-id" yaml:"dayId" db:"day_id"`
+type VsDuelData struct {
+	Id                 string `json:"id" yaml:"id" db:"id"`
+	VsDuelId           string `json:"vsduel-id" yaml:"vsDuelId" db:"vsduel_id"`
+	VsDuelDayId        string `json:"vsduel-day-id" yaml:"vsDuelDayId" db:"vsduel-day-id"`
+	VsAllianceDataMap  `json:"vsduel-alliance-data" yaml:"vsDuelAllianceData"`
+	VsCommanderDataMap `json:"vsduel-commander-data" yaml:"vsDuelCommanderData"`
 }
 
-type CommanderData struct {
-	Points      int64  `json:"points" yaml:"points" db:"points"`
-	Rank        int64  `json:"rank" yaml:"rank" db:"rank"`
-	DuelId      string `json:"duel-id" yaml:"duelId" db:"duel_id"`
-	DayID       string `json:"day-id" yaml:"dayId" db:"day_id"`
-	CommanderID string `json:"commander-id" yaml:"commanderId" db:"commander_id"`
+type VsAllianceData struct {
+	Points       int    `json:"points" yaml:"points" db:"points"`
+	Tag          string `json:"tag" yaml:"tag" db:"tag"`
+	AllianceId   string `json:"alliance-id" yaml:"allianceId" db:"alliance_id"`
+	VsDuelDataId string `json:"vsduel-data-id" yaml:"vsDuelDataId" db:"vsduel-data-id"`
 }
 
-type Days []Day
+type VsCommanderData struct {
+	Points       int    `json:"points" yaml:"points" db:"points"`
+	Rank         int    `json:"rank" yaml:"rank" db:"rank"`
+	Name         string `json:"name" yaml:"name" db:"name"`
+	CommanderId  string `json:"commander-id" yaml:"commanderId" db:"commander_id"`
+	VsDuelDataId string `json:"vsduel-data-id" yaml:"vsDuelDataId" db:"vsduel-data-id"`
+}
+
+type VsDays map[string]VsDay
+type VsDuelDataMap map[string]VsDuelData
+type VsCommanderDataMap map[string]VsCommanderData
+type VsAllianceDataMap map[string]VsAllianceData
 
 var DayFile string
 
-func InitDays() error {
-	var ds []Day
+var (
+	ErrDuelDataInsert = fmt.Errorf("failed to insert duel data")
+	ErrNumDays        = fmt.Errorf("number of versus days is not 6")
+)
+
+func initDays() error {
+	var ds []VsDay
 
 	df, err := os.ReadFile(DayFile)
 	if err != nil {
@@ -57,13 +72,12 @@ func InitDays() error {
 		return err
 	}
 	if len(ds) != 6 {
-		return fmt.Errorf("did not read all 6 days from days config")
+		return ErrNumDays
 	}
 
 	for _, d := range ds {
 		var w wtid.WTID
 		w.New("wartracker", "vsday", 0)
-		d.Id = w.Id
 
 		tx, err := db.Connection.Begin()
 		if err != nil {
@@ -82,7 +96,7 @@ func InitDays() error {
 			return err
 		}
 		if x != 1 {
-			return fmt.Errorf("failed to insert vsduel day")
+			return ErrDuelDataInsert
 		}
 		err = tx.Commit()
 		if err != nil {
@@ -93,8 +107,8 @@ func InitDays() error {
 	return nil
 }
 
-func GetDays() (Days, error) {
-	var ds Days
+func GetDays() (VsDays, error) {
+	ds := make(VsDays)
 
 	rows, err := db.Connection.Queryx("SELECT * FROM vsduel_day")
 	if err != nil {
@@ -102,21 +116,25 @@ func GetDays() (Days, error) {
 	}
 
 	for rows.Next() {
-		var d Day
+		var d VsDay
 		err = rows.StructScan(&d)
 		if err != nil {
 			return nil, err
 		}
-		ds = append(ds, d)
+		ds[d.DayOfWeek] = d
+	}
+
+	if len(ds) != 6 {
+		return nil, ErrNumDays
 	}
 
 	return ds, nil
 }
 
-func (v *Duel) Create() error {
+func (v *VsDuel) Create() error {
 	var w wtid.WTID
 	w.New("wartracker", "vsduel", 0)
-	v.Id = w.Id
+	v.Id = string(w.Id)
 
 	tx, err := db.Connection.Begin()
 	if err != nil {
@@ -136,30 +154,45 @@ func (v *Duel) Create() error {
 		return err
 	}
 	if x != 1 {
-		return fmt.Errorf("failed to insert vsduel")
+		return ErrDuelDataInsert
 	}
 	err = tx.Commit()
 	if err != nil {
 		return err
 	}
 
-	return nil
+	ds, err := GetDays()
+	if err != nil && err == sql.ErrNoRows {
+		err = initDays()
+		if err != nil {
+			return err
+		}
+		ds, err = GetDays()
+	}
+	if err != nil {
+		return err
+	}
+
+	return v.initVsDuelData(ds)
 }
 
-func (v *Duel) Update() error {
-	if len(v.DuelData) != 2 {
-		return fmt.Errorf("length of duel data for [%s] is not 2 ", v.Id)
-	}
+func (v *VsDuel) initVsDuelData(ds VsDays) error {
 	tx, err := db.Connection.Begin()
 	if err != nil {
 		return err
 	}
-	for i := 0; i < 2; i++ {
-		res, err := tx.Exec("INSERT INTO vsduel_data (points, vsduel_day_id, vsduel_id, alliance_id) VALUES (?, ?, ?, ?)",
-			v.DuelData[i].Points,
-			v.DuelData[i].DayID,
-			v.DuelData[i].DuelId,
-			v.DuelData[i].AllianceID)
+	for _, d := range ds {
+		var w wtid.WTID
+		var dd VsDuelData
+		w.New("wartracker", "vsdueldata", 0)
+		dd.Id = string(w.Id)
+		dd.VsDuelDayId = d.Id
+		dd.VsDuelId = v.Id
+
+		res, err := tx.Exec("INSERT INTO vsduel_data (id, vsduel_day_id, vsduel_id) VALUES (?, ?, ?)",
+			dd.Id,
+			dd.VsDuelDayId,
+			dd.VsDuelId)
 		if err != nil {
 			return err
 		}
@@ -168,8 +201,9 @@ func (v *Duel) Update() error {
 			return err
 		}
 		if x != 1 {
-			return fmt.Errorf("failed to insert commander data")
+			return fmt.Errorf("failed to insert vsduel")
 		}
+
 	}
 	err = tx.Commit()
 	if err != nil {
@@ -179,21 +213,32 @@ func (v *Duel) Update() error {
 	return nil
 }
 
-func (v *Duel) AddDuelData() error {
-	if len(v.DuelData) != 2 {
-		return fmt.Errorf("data for duel [%s] should have 2 entries", v.Date)
-	}
+func (v *VsDuel) UpsertAllianceData(did string) error {
+	d := v.VsDuelDataMap[did]
+
 	tx, err := db.Connection.Begin()
 	if err != nil {
 		return err
 	}
+	_, err = tx.Exec("DELETE FROM vsduel_alliance WHERE vsduel_data_id=?", did)
+	if err != nil {
+		return nil
+	}
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
 
-	for _, d := range v.DuelData {
-		res, err := tx.Exec("INSERT INTO vsduel_data (points, vsduel_day_id, vsduel_id, alliance_id) VALUES (?, ?, ?, ?)",
+	tx, err = db.Connection.Begin()
+	if err != nil {
+		return err
+	}
+	for _, d := range d.VsAllianceDataMap {
+		res, err := tx.Exec("INSERT INTO vsduel_alliance (points, tag, alliance_id, vsduel_data_id) VALUES (?, ?, ?, ?)",
 			d.Points,
-			d.DayID,
-			d.DuelId,
-			d.AllianceID)
+			d.Tag,
+			d.AllianceId,
+			did)
 		if err != nil {
 			return err
 		}
@@ -204,31 +249,42 @@ func (v *Duel) AddDuelData() error {
 		if x != 1 {
 			return fmt.Errorf("failed to insert duel data")
 		}
-		err = tx.Commit()
-		if err != nil {
-			return err
-		}
+	}
+	err = tx.Commit()
+	if err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func (v *Duel) AddCommanderData(d Day) error {
-	if len(v.CommanderData) < 1 {
-		return fmt.Errorf("data for duel [%s] is empty", v.Date)
-	}
+func (v *VsDuel) UpsertCommanderData(did string) error {
+	d := v.VsDuelDataMap[did]
+
 	tx, err := db.Connection.Begin()
 	if err != nil {
 		return err
 	}
+	_, err = tx.Exec("DELETE FROM vsduel_commander WHERE vsduel_data_id=?", did)
+	if err != nil {
+		return nil
+	}
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
 
-	for _, d := range v.CommanderData {
-		res, err := tx.Exec("INSERT INTO vsduel_commanders (points, rank, vsduel_id, commander_id, vsduel_day_id) VALUES (?, ?, ?, ?, ?)",
+	tx, err = db.Connection.Begin()
+	if err != nil {
+		return err
+	}
+	for _, d := range d.VsCommanderDataMap {
+		res, err := tx.Exec("INSERT INTO vsduel_commander (points, rank, name, commander_id, vsduel_data_id) VALUES (?, ?, ?, ?, ?)",
 			d.Points,
 			d.Rank,
-			d.DuelId,
-			d.CommanderID,
-			d.DayID)
+			d.Name,
+			d.CommanderId,
+			d.VsDuelDataId)
 		if err != nil {
 			return err
 		}
@@ -239,62 +295,91 @@ func (v *Duel) AddCommanderData(d Day) error {
 		if x != 1 {
 			return fmt.Errorf("failed to insert duel data")
 		}
-		err = tx.Commit()
-		if err != nil {
-			return err
-		}
+	}
+	err = tx.Commit()
+	if err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func (v *Duel) GetCommanderTotal() error {
+func (v *VsDuel) GetCommanderTotal() error {
 	return fmt.Errorf("not yet implemented")
 }
 
-func (v *Duel) GetByDate(d string) error {
+func (v *VsDuel) GetWeekByDate(d string) error {
 	return fmt.Errorf("not yet implemented")
 }
 
-func (v *Duel) GetById(id string) error {
+func (v *VsDuel) GetById(id string) error {
 	err := db.Connection.QueryRowx("SELECT * FROM vsduel WHERE id=?", id).StructScan(v)
 	if err != nil {
 		return err
 	}
 
 	rows, err := db.Connection.Queryx("SELECT * FROM vsduel_data WHERE vsduel_id=?", id)
-	if err != nil && err != sql.ErrNoRows {
-		return err
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil
+		} else {
+			return err
+		}
 	}
 	for rows.Next() {
-		var d DuelData
+		var d VsDuelData
 		err = rows.StructScan(&d)
 		if err != nil {
 			return err
 		}
-		v.DuelData = append(v.DuelData, d)
+		v.VsDuelDataMap[d.Id] = d
 	}
 
-	rows, err = db.Connection.Queryx("SELECT * FROM vsduel_commanders WHERE vsduel_id=?", id)
-	if err != nil && err != sql.ErrNoRows {
-		return err
-	}
-	for rows.Next() {
-		var d CommanderData
-		err = rows.StructScan(&d)
+	for _, d := range v.VsDuelDataMap {
+		rows, err = db.Connection.Queryx("SELECT * FROM vsduel_alliance WEHRE vsduel_data_id=?", d.Id)
 		if err != nil {
-			return err
+			if err == sql.ErrNoRows {
+				return nil
+			} else {
+				return err
+			}
 		}
-		v.CommanderData = append(v.CommanderData, d)
+		for rows.Next() {
+			var a VsAllianceData
+			err = rows.StructScan(&a)
+			if err != nil {
+				return err
+			}
+			d.VsAllianceDataMap[d.Id] = a
+		}
 	}
 
-	return err
+	for _, d := range v.VsDuelDataMap {
+		rows, err = db.Connection.Queryx("SELECT * FROM vsduel_commander WEHRE vsduel_data_id=?", d.Id)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return nil
+			} else {
+				return err
+			}
+		}
+		for rows.Next() {
+			var c VsCommanderData
+			err = rows.StructScan(&c)
+			if err != nil {
+				return err
+			}
+			d.VsCommanderDataMap[d.Id] = c
+		}
+	}
+
+	return nil
 }
 
-func (d *Duel) DuelToJSON() ([]byte, error) {
+func (d *VsDuel) DuelToJSON() ([]byte, error) {
 	return json.MarshalIndent(d, "", "\t")
 }
 
-func (d *Duel) DuelToYAML() ([]byte, error) {
+func (d *VsDuel) DuelToYAML() ([]byte, error) {
 	return yaml.Marshal(d)
 }

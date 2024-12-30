@@ -3,6 +3,7 @@ package commander
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 	"wartracker/pkg/db"
 	"wartracker/pkg/wtid"
 
@@ -10,29 +11,38 @@ import (
 )
 
 type Commander struct {
-	Id       string `json:"id" yaml:"id" db:"id"`
-	NoteName string `json:"note-name" yaml:"noteName" db:"note_name"`
-	Data     []Data `json:"data" yaml:"data"`
+	Id       string  `json:"id" yaml:"id" db:"id"`
+	NoteName string  `json:"note-name" yaml:"noteName" db:"note_name"`
+	Data     DataMap `json:"data" yaml:"data"`
 }
 
 type Data struct {
 	Date            string `json:"date" yaml:"date" db:"date"`
 	PFP             []byte `json:"pfp" yaml:"pfp" db:"pfp"`
-	HQLevel         int64  `json:"hq-level" yaml:"hqLevel" db:"hq_level"`
-	Likes           int64  `json:"likes" yaml:"likes" db:"likes"`
-	HQPower         int64  `json:"hq-power" yaml:"HqPower" db:"hq_power"`
-	Kills           int64  `json:"kills" yaml:"kills" db:"kills"`
-	ProfessionLevel int64  `json:"profession-level" yaml:"professionLevel" db:"profession_level"`
-	TotalHeroPower  int64  `json:"total-hero-power" yaml:"totalHeroPower" db:"total_hero_power"`
-	AllianceID      string `json:"alliance-id" yaml:"allianceId" db:"alliance_id"`
-	CommanderID     string `json:"commander-id" yaml:"commanderId" db:"commander_id"`
+	HQLevel         int    `json:"hq-level" yaml:"hqLevel" db:"hq_level"`
+	Likes           int    `json:"likes" yaml:"likes" db:"likes"`
+	HQPower         int    `json:"hq-power" yaml:"HqPower" db:"hq_power"`
+	Kills           int    `json:"kills" yaml:"kills" db:"kills"`
+	ProfessionLevel int    `json:"profession-level" yaml:"professionLevel" db:"profession_level"`
+	TotalHeroPower  int    `json:"total-hero-power" yaml:"totalHeroPower" db:"total_hero_power"`
+	AllianceId      string `json:"alliance-id" yaml:"allianceId" db:"alliance_id"`
+	CommanderId     string `json:"commander-id" yaml:"commanderId" db:"commander_id"`
 }
 
-func (c *Commander) Create(server int64) error {
+type DataMap map[string]Data
+
+func (c *Commander) Create(server int) error {
 	var w wtid.WTID
 	w.New("wartracker", "commander", server)
-	c.Id = w.Id
-	c.Data[0].CommanderID = w.Id
+	c.Id = string(w.Id)
+
+	date := time.Now().Format(time.DateOnly)
+
+	if d, ok := c.Data[date]; ok {
+		d.CommanderId = c.Id
+		d.Date = date
+		c.Data[date] = d
+	}
 
 	tx, err := db.Connection.Begin()
 	if err != nil {
@@ -69,18 +79,18 @@ func (c *Commander) Create(server int64) error {
 		kills, 
 		profession_level, 
 		total_hero_power, 
-		alliance_id,
-		commander_id
+		commander_id,
+		alliance_id
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		c.Data[0].Date,
-		c.Data[0].HQLevel,
-		c.Data[0].Likes,
-		c.Data[0].HQPower,
-		c.Data[0].Kills,
-		c.Data[0].ProfessionLevel,
-		c.Data[0].TotalHeroPower,
-		c.Data[0].AllianceID,
-		c.Data[0].CommanderID)
+		c.Data[date].Date,
+		c.Data[date].HQLevel,
+		c.Data[date].Likes,
+		c.Data[date].HQPower,
+		c.Data[date].Kills,
+		c.Data[date].ProfessionLevel,
+		c.Data[date].TotalHeroPower,
+		c.Data[date].CommanderId,
+		c.Data[date].AllianceId)
 	if err != nil {
 		return err
 	}
@@ -103,21 +113,29 @@ func (c *Commander) Update() error {
 	if len(c.Data) < 1 {
 		return fmt.Errorf("data for commander [%s] is empty", c.NoteName)
 	}
+
+	date := time.Now().Format("2006-01-02")
+
+	if d, ok := c.Data[date]; ok {
+		d.CommanderId = c.Id
+		d.Date = date
+		c.Data[date] = d
+	}
+
 	tx, err := db.Connection.Begin()
 	if err != nil {
 		return err
 	}
 
-	res, err := tx.Exec("INSERT INTO commander_data (date, pfp, hq_level, likes, hq_power, kills, profession_level, total_hero_power, alliance_id, commander_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		c.Data[0].Date,
-		c.Data[0].PFP,
-		c.Data[0].HQLevel,
-		c.Data[0].Likes,
-		c.Data[0].HQPower,
-		c.Data[0].Kills,
-		c.Data[0].ProfessionLevel,
-		c.Data[0].TotalHeroPower,
-		c.Data[0].AllianceID,
+	res, err := tx.Exec("INSERT INTO commander_data (date, hq_level, likes, hq_power, kills, profession_level, total_hero_power, alliance_id, commander_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		c.Data[date].Date,
+		c.Data[date].HQLevel,
+		c.Data[date].Likes,
+		c.Data[date].HQPower,
+		c.Data[date].Kills,
+		c.Data[date].ProfessionLevel,
+		c.Data[date].TotalHeroPower,
+		c.Data[date].AllianceId,
 		c.Id)
 	if err != nil {
 		return err
@@ -153,7 +171,7 @@ func (c *Commander) GetById(id string) error {
 		if err != nil {
 			return err
 		}
-		c.Data = append(c.Data, d)
+		c.Data[d.Date] = d
 	}
 
 	return nil

@@ -45,7 +45,7 @@ func ScanCommander() (*commander.Commander, error) {
 
 	initImageMaps("commander")
 
-	img, err := scanner.SetImageDensity(infile, 300)
+	img, err := scanner.SetImageDensity(inputFile, 600)
 	if err != nil {
 		return nil, err
 	}
@@ -62,6 +62,9 @@ func ScanCommander() (*commander.Commander, error) {
 				fmt.Printf("scanning %s...\n", k)
 			}
 			d.HQLevel, err = im.ProcessImageInt(img)
+			if err != nil {
+				d.HQLevel = 0
+			}
 		case "nametag":
 			if cmd.Debug {
 				fmt.Printf("scanning %s...\n", k)
@@ -71,67 +74,81 @@ func ScanCommander() (*commander.Commander, error) {
 				return nil, err
 			}
 			names := strings.Split(nt, "]")
-			tag = names[0][1:]
-			err = a.GetByTag(tag)
-			if err != nil && err != sql.ErrNoRows {
-				return nil, err
+			if len(names) < 2 {
+				tag = ""
+				c.NoteName = strings.ToLower(names[0])
+				d.AllianceId = ""
+			} else {
+				tag = names[0][1:]
+				err = a.GetByTag(tag)
+				if err != nil && err != sql.ErrNoRows {
+					return nil, err
+				}
+				d.AllianceId = a.Id
+				c.NoteName = strings.ToLower(names[1])
 			}
-			d.AllianceID = a.Id
-			c.NoteName = names[1]
 		case "hqpower":
 			if cmd.Debug {
 				fmt.Printf("scanning %s...\n", k)
 			}
 			d.HQPower, err = im.ProcessImageAbbrInt(img)
+			if err != nil {
+				d.HQPower = 0
+			}
 		case "kills":
 			if cmd.Debug {
 				fmt.Printf("scanning %s...\n", k)
 			}
 			d.Kills, err = im.ProcessImageAbbrInt(img)
+			if err != nil {
+				d.Kills = 0
+			}
 		case "proflevel":
 			if cmd.Debug {
 				fmt.Printf("scanning %s...\n", k)
 			}
 			d.ProfessionLevel, err = im.ProcessImageInt(img)
+			if err != nil {
+				d.ProfessionLevel = 0
+			}
 		case "likes":
 			if cmd.Debug {
 				fmt.Printf("scanning %s...\n", k)
 			}
 			d.Likes, err = im.ProcessImageInt(img)
+			if err != nil {
+				d.Likes = 0
+			}
 		default:
 			return nil, fmt.Errorf("invalid key \"%s\" in map configuration", k)
-		}
-		if err != nil {
-			return nil, err
 		}
 	}
 
 	if a.Id == "" {
 		fmt.Printf("Commander's alliance [%s] does not exist in the database\n", tag)
 	} else {
-		fmt.Printf("Associating commander with [%s]%s\n", tag, a.Data[0].Name)
+		fmt.Printf("Associating commander with [%s]\n", tag)
 	}
 
 	err = c.GetByNoteName(c.NoteName)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			fmt.Printf("Commander does not exist.  Please use \"wartracker-cli commander create -i %s -s [server]\" to create.\n", outfile)
+			fmt.Printf("Commander does not exist.  Please use \"wartracker-cli commander create -i %s -s [server]\" to create.\n", outputFile)
 		} else {
 			return nil, err
 		}
 	} else {
-		fmt.Printf("Commander does exists.  Please use \"wartracker-cli commander update -i %s -s [server]\" to update.\n", outfile)
+		fmt.Printf("Commander does exists.  Please use \"wartracker-cli commander update -i %s -s [server]\" to update.\n", outputFile)
 	}
 
 	d.Date = time.Now().Format(time.DateOnly)
-	c.Data = append(c.Data, d)
-	c.Data = c.Data[1:]
+	c.Data[d.Date] = d
 
 	j, err := c.CommanderToJSON()
 	if err != nil {
 		return nil, err
 	}
-	err = os.WriteFile(outfile, j, 0644)
+	err = os.WriteFile(outputFile, j, 0644)
 	if err != nil {
 		return nil, err
 	}
@@ -159,14 +176,4 @@ var scanCmd = &cobra.Command{
 
 func init() {
 	commanderCmd.AddCommand(scanCmd)
-
-	scanCmd.Flags().StringVarP(&infile, "image", "i", "", "image file (PNG) to scan for commander data")
-	scanCmd.MarkFlagRequired("image")
-	scanCmd.MarkFlagFilename("image")
-	scanCmd.Flags().StringVarP(&outfile, "output", "o", "", "JSON file to output commander data to")
-	scanCmd.MarkFlagRequired("output")
-	scanCmd.MarkFlagFilename("output")
-	scanCmd.Flags().Int64VarP(&server, "server", "s", 1, "Commander's server number")
-	scanCmd.MarkFlagRequired("server")
-
 }

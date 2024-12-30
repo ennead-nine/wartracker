@@ -30,12 +30,12 @@ import (
 
 var (
 	date   string
-	week   int64
+	week   int
 	league string
 )
 
 func CreateDuel() error {
-	var d vsduel.Duel
+	var d vsduel.VsDuel
 
 	d.Date = date
 	d.League = league
@@ -50,7 +50,7 @@ func CreateDuel() error {
 	if err != nil {
 		return err
 	}
-	err = os.WriteFile(outfile, j, 0644)
+	err = os.WriteFile(outputFile, j, 0644)
 	if err != nil {
 		return err
 	}
@@ -79,6 +79,5 @@ func init() {
 
 	createCmd.Flags().StringVarP(&date, "date", "d", "", "Date the duel start in MM-DD-YYYY format")
 	createCmd.Flags().StringVarP(&league, "league", "l", "", "The level of the duel league")
-	createCmd.Flags().Int64VarP(&week, "week", "w", 0, "Duel league week")
-	createCmd.Flags().StringVarP(&outfile, "outfile", "o", "", "Output file")
+	createCmd.Flags().IntVarP(&week, "week", "w", 0, "Duel league week")
 }

@@ -37,9 +37,9 @@ func CreateAlliance() error {
 		return err
 	}
 
-	err = a.GetByTag(a.Data[0].Tag)
+	err = a.GetByTag(a.Tag)
 	if err != sql.ErrNoRows {
-		return fmt.Errorf("alliance [%s] already exists", a.Data[0].Tag)
+		return fmt.Errorf("alliance [%s] already exists", a.Tag)
 	}
 
 	return a.Create(a.Server)
@@ -61,6 +61,4 @@ var createCmd = &cobra.Command{
 
 func init() {
 	allianceCmd.AddCommand(createCmd)
-
-	createCmd.Flags().StringVarP(&infile, "inputfile", "i", "", "JSON file to create an allaince")
 }

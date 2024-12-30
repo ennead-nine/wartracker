@@ -65,7 +65,4 @@ var createCmd = &cobra.Command{
 
 func init() {
 	commanderCmd.AddCommand(createCmd)
-
-	createCmd.Flags().StringVarP(&infile, "inputfile", "i", "", "JSON file to create a commander")
-	createCmd.Flags().Int64VarP(&server, "server", "s", 0, "Commander's server number")
 }

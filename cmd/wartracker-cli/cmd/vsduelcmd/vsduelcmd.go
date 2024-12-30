@@ -37,10 +37,12 @@ import (
 
 var (
 	// Common flag variables
-	infile  string
-	outfile string
-	id      string
-	dow     string
+	dow        string
+	inputFile  string
+	outputFile string
+	id         string
+	name       string
+	server     int
 
 	Imm scanner.ImageMaps
 )
@@ -65,8 +67,8 @@ func initImageMaps(m string) {
 	}
 }
 
-func ReadDuelJSON(v *vsduel.Duel) error {
-	in, err := os.Open(infile)
+func ReadDuelJSON(v *vsduel.VsDuel) error {
+	in, err := os.Open(inputFile)
 	if err != nil {
 		return err
 	}
@@ -98,13 +100,11 @@ to quickly create a Cobra application.`,
 func init() {
 	cmd.RootCmd.AddCommand(vsduelCmd)
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// vsduelCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// vsduelCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	vsduelCmd.PersistentFlags().StringVar(&inputFile, "inputfile", "", "File with vs day data")
+	vsduelCmd.MarkPersistentFlagFilename("inputfile")
+	vsduelCmd.PersistentFlags().StringVar(&outputFile, "outputfile", "", "YAML file with vs day data")
+	vsduelCmd.MarkPersistentFlagFilename("outputfile")
+	vsduelCmd.PersistentFlags().StringVar(&id, "id", "", "Resource ID")
+	vsduelCmd.PersistentFlags().StringVar(&name, "name", "", "Resource ID")
+	vsduelCmd.PersistentFlags().IntVar(&server, "server", 0, "Resource ID")
 }

@@ -10,14 +10,20 @@ import (
 
 // War Tracker ID types and functions.
 type WTID struct {
-	Id       string
+	Id       Id
 	Org      string
 	Resource string
-	Server   int64
+	Server   int
 	UUID     string
 }
 
-func (wtid *WTID) New(org string, resource string, server ...int64) {
+type Id string
+
+func (id Id) String() string {
+	return string(id)
+}
+
+func (wtid *WTID) New(org string, resource string, server ...int) {
 	wtid.Org = org
 	wtid.Resource = resource
 	if len(server) > 0 {
@@ -27,27 +33,27 @@ func (wtid *WTID) New(org string, resource string, server ...int64) {
 	}
 	wtid.UUID = uuid.NewString()
 
-	wtid.Id = wtid.Org + "." + wtid.Resource + "." + strconv.Itoa(int(wtid.Server)) + "." + wtid.UUID
+	wtid.Id = Id(wtid.Org + "." + wtid.Resource + "." + strconv.Itoa(int(wtid.Server)) + "." + wtid.UUID)
 }
 
-func (wtid *WTID) Parse(id string) error {
+func (wtid *WTID) Parse(id Id) error {
 	re := regexp.MustCompile(`^(.*)\.(.*)\.(.*)\.(.*)$`)
-	fields := re.FindAllString(id, 4)
+	fields := re.FindAllString(string(id), 4)
 
-	wtid.Id = id
+	wtid.Id = Id(id)
 	wtid.Org = fields[0]
 	wtid.Resource = fields[1]
 	si, err := strconv.Atoi(fields[2])
 	if err != nil {
 		return err
 	}
-	wtid.Server = int64(si)
+	wtid.Server = si
 	wtid.UUID = fields[3]
 
 	return nil
 }
 
-func Validate(id string) error {
+func Validate(id Id) error {
 	var w WTID
 
 	err := w.Parse(id)
@@ -57,7 +63,7 @@ func Validate(id string) error {
 	if w.Org != "wartracker" {
 		return fmt.Errorf("invalid org in id")
 	}
-	_, err = uuid.Parse(w.Id)
+	_, err = uuid.Parse(string(w.Id))
 	if err != nil {
 		return err
 	}

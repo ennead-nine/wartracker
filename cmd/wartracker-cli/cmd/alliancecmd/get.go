@@ -30,11 +30,11 @@ import (
 
 func GetAlliance() error {
 	var a alliance.Alliance
-	var o []byte
 	var err error
 
 	if id != "" {
-		err = a.GetById(id)
+		a.Id = id
+		err = a.Get()
 	} else if tag != "" {
 		err = a.GetByTag(tag)
 	}
@@ -42,7 +42,7 @@ func GetAlliance() error {
 		return err
 	}
 
-	o, err = a.AllianceToJSON()
+	o, err := a.AllianceToJSON()
 	if err != nil {
 		return err
 	}
@@ -70,18 +70,4 @@ var getCmd = &cobra.Command{
 
 func init() {
 	allianceCmd.AddCommand(getCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// canmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// scanCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-	getCmd.Flags().StringVarP(&id, "id", "i", "", "Alliance's wartracker ID")
-	getCmd.Flags().StringVarP(&tag, "tag", "t", "", "Alliance's in game tag")
-	getCmd.MarkFlagsOneRequired("id", "tag")
-	getCmd.MarkFlagsMutuallyExclusive("id", "tag")
 }
