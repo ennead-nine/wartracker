@@ -3,3 +3,6 @@ scratch: _scratch
 tessdata: /Users/erumer/src/github.com/tesseract-ocr/tessdata
 mapdir: config/scanner/maps
 languages:
+listenAddr: ":3001"
+cert: "~/.lego/certificates/_.ennead.games.crt"
+key: "~/.lego/certificates/_.ennead.games.key"

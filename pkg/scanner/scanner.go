@@ -17,21 +17,26 @@ import (
 	"gopkg.in/gographics/imagick.v3/imagick"
 )
 
-var (
-	Debug       bool
-	Process     int
-	ScratchDir  string
-	TessdataDir string
-	Languages   []string
-)
-
-type ImageMap struct {
-	Rect
-	CharFilter
-	PreProcess
+type Scanner struct {
+	ImageFileame string
+	Image        image.Image
+	ImageMap
+	Options
 }
 
-type ImageMaps map[string]ImageMap
+type ImageMap map[string]Rect
+
+type Options struct {
+	Languages     []string
+	Invert        bool
+	GrayScale     bool
+	Contrast      bool
+	CharWhitelist string
+	CharBlacklist string
+	TessdataDir   string
+	ScratchDir    string
+	Debug         bool
+}
 
 type Rect struct {
 	PX int `yaml:"px"`
@@ -40,21 +45,16 @@ type Rect struct {
 	RY int `yaml:"ry"`
 }
 
-type CharFilter struct {
-	Filter string `yaml:"filter"`
-}
-
-type PreProcess struct {
-	Gray   bool `yaml:"gray"`
-	Invert bool `yaml:"invert"`
-	BG     bool `yaml:"bg"`
-}
-
-type SubImager interface {
+type subImager interface {
 	SubImage(r image.Rectangle) image.Image
 }
 
-func ParseAbbvInt(s string) (int, error) {
+// SetImageFilename
+func (s *Scanner) SetImageFilename(f string) {
+
+}
+
+func parseAbbvInt(s string) (int, error) {
 	if len(s) < 2 {
 		return 0, fmt.Errorf("length of string \"%s\" is less than 2", s)
 	}
@@ -151,7 +151,7 @@ func invertImage(img image.Image) (image.Image, error) {
 	return img, nil
 }
 
-func bgImage(img image.Image) (image.Image, error) {
+func contrastImage(img image.Image) (image.Image, error) {
 	Process++
 
 	if Debug {
@@ -284,7 +284,7 @@ func GetImageRect(px, py, rx, ry int, img image.Image) image.Image {
 	p := image.Point{px, py}
 	r := image.Rect(0, 0, rx, ry)
 	r = r.Add(p)
-	newimg = img.(SubImager).SubImage(r)
+	newimg = img.(subImager).SubImage(r)
 
 	return newimg
 }
@@ -369,7 +369,7 @@ func (im *ImageMap) ProcessImageAbbrInt(img image.Image) (int, error) {
 		return 0, err
 	}
 
-	i, err := ParseAbbvInt(t)
+	i, err := parseAbbvInt(t)
 	if err != nil {
 		return 0, err
 	}

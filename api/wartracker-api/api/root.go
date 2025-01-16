@@ -2,8 +2,10 @@ package api
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"os"
+	"wartracker/api/wartracker-api/build"
 	"wartracker/pkg/db"
 
 	"github.com/go-chi/chi/v5"
@@ -13,12 +15,25 @@ import (
 
 var root = chi.NewRouter()
 
+type Version struct {
+	Release     string `json:"version"`
+	Build       string `json:"build"`
+	BuildDate   string `json:"build-date"`
+	Description string `json:"description"`
+}
+
 func GetRoot(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Root...\n"))
+	w.Write([]byte(build.Build + "\n"))
 }
 
 func Server() {
-	http.ListenAndServe(":3000", root)
+	httpAddr := viper.GetString("listenAddr")
+	server := &http.Server{
+		Addr:    httpAddr,
+		Handler: root,
+	}
+
+	log.Fatal(server.ListenAndServe())
 }
 
 func init() {
