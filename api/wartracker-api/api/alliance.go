@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"wartracker/pkg/alliance"
 
@@ -78,16 +79,23 @@ func (h AllianceHandler) GetAlliance(w http.ResponseWriter, r *http.Request) {
 
 func (h AllianceHandler) CreateAlliance(w http.ResponseWriter, r *http.Request) {
 	indent := GetQueryBool(r, "indent")
-	server := GetQueryInt(r, "server")
 
 	var a alliance.Alliance
 
-	err := json.NewDecoder(r.Body).Decode(&a)
+	s := chi.URLParam(r, "server")
+	si, err := strconv.Atoi(s)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	err = a.Create(server)
+	a.Server = si
+
+	err = json.NewDecoder(r.Body).Decode(&a)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	err = a.Create()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -140,7 +148,7 @@ func AllianceRoutes() chi.Router {
 
 	allianceHandler := AllianceHandler{}
 	r.Get("/", allianceHandler.ListAlliances)
-	r.Post("/", allianceHandler.CreateAlliance)
+	r.Post("/{server}", allianceHandler.CreateAlliance)
 	r.Get("/{id}", allianceHandler.GetAlliance)
 	r.Put("/{id}", allianceHandler.UpdateAlliance)
 	r.Put("/{id}/data", allianceHandler.AddAllianceData)

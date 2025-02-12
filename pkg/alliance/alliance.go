@@ -22,8 +22,11 @@ THE SOFTWARE.
 package alliance
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"regexp"
 	"time"
 	"wartracker/pkg/db"
 	"wartracker/pkg/wtid"
@@ -41,7 +44,7 @@ type Alliance struct {
 type Data struct {
 	Date        string `json:"date" yaml:"date" db:"date"`
 	Name        string `json:"name" yaml:"name" db:"name"`
-	Power       int    `json:"power" yaml:"power" db:"power"`
+	Power       int64  `json:"power" yaml:"power" db:"power"`
 	GiftLevel   int    `json:"gift-level" yaml:"giftLevel" db:"gift_level"`
 	MemberCount int    `json:"member-count" yaml:"memberCount" db:"member_count"`
 	R5Id        string `json:"r5-id" yaml:"r5Id" db:"r5_id"`
@@ -52,17 +55,26 @@ type DataMap map[string]Data
 type AllianceMap map[string]Alliance
 
 var (
-	ErrAllianceInsert  = errors.New("alliance: failed to insert alliance")
-	ErrAllianceUpdate  = errors.New("alliance: failed to update alliance")
-	ErrAllianceAddData = errors.New("alliance: failed to add alliance data")
-	ErrInvalidArg      = errors.New("invalid argument")
-	ErrInvalidMapKey   = errors.New("invalid key in map configuration")
+	ErrAliianceExists     = errors.New("alliance: alliance already exists")
+	ErrAllianceNotFound   = errors.New("alliance: alliance not found")
+	ErrAllianceDataExists = errors.New("alliance: alliance data already exists")
+	ErrAllianceInsert     = errors.New("alliance: failed to insert alliance")
+	ErrAllianceUpdate     = errors.New("alliance: failed to update alliance")
+	ErrAllianceAddData    = errors.New("alliance: failed to add alliance data")
+	ErrInvalidArg         = errors.New("invalid argument")
+	ErrInvalidMapKey      = errors.New("invalid key in map configuration")
 )
 
 // Create adds and alliance resource to the database
-func (a *Alliance) Create(server int) error {
+func (a *Alliance) Create() error {
+	var b Alliance
+	err := b.GetByTag(a.Tag)
+	if err != sql.ErrNoRows {
+		return ErrAliianceExists
+	}
+
 	var w wtid.WTID
-	w.New("wartracker", "alliance", server)
+	w.New("wartracker", "alliance", a.Server)
 	a.Id = string(w.Id)
 
 	tx, err := db.Connection.Begin()
@@ -135,6 +147,12 @@ func (a *Alliance) Update() error {
 
 // AddData adds data to an alliance resource in the database
 func (a *Alliance) AddData(date string) error {
+	var b Alliance
+	err := b.GetDataByDate(date)
+	if err != sql.ErrNoRows {
+		return ErrAllianceDataExists
+	}
+
 	tx, err := db.Connection.Begin()
 	if err != nil {
 		return err
@@ -250,6 +268,19 @@ func (a *Alliance) GetLatestData() error {
 	return nil
 }
 
+func (a *Alliance) GetDataByDate(date string) error {
+	a.DataMap = make(DataMap)
+	var d Data
+
+	err := db.Connection.QueryRowx("SELECT * FROM alliance_data WHERE date=?", date).StructScan(&d)
+	if err != nil {
+		return err
+	}
+	a.DataMap[d.Date] = d
+
+	return nil
+}
+
 // Finds the (first) alliance with the given tag, and returns the alliance object with all alliance data
 func (a *Alliance) GetByTag(t string) error {
 	err := db.Connection.QueryRowx("SELECT id FROM alliance WHERE tag=?", t).Scan(&a.Id)
@@ -271,4 +302,13 @@ func (a *Alliance) AllianceToJSON() ([]byte, error) {
 
 func (a *Alliance) AllianceToYAML() ([]byte, error) {
 	return yaml.Marshal(a)
+}
+
+func SplitTagName(s string) ([]string, error) {
+	r := regexp.MustCompile(`^\[(.*)\] (.*)$`)
+	m := r.FindAllStringSubmatch(s, -1)
+	if len(m[0]) != 3 {
+		return nil, fmt.Errorf("could not split alliance name: %s", s)
+	}
+	return m[0][1:], nil
 }

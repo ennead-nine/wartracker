@@ -13,6 +13,8 @@ import (
 type Commander struct {
 	Id       string  `json:"id" yaml:"id" db:"id"`
 	NoteName string  `json:"note-name" yaml:"noteName" db:"note_name"`
+	Tag      string  `json:"tag" yaml:"tag" db:"tag"`
+	Server   int     `json:"server" yaml:"server" db:"server"`
 	Data     DataMap `json:"data" yaml:"data"`
 }
 
@@ -29,29 +31,31 @@ type Data struct {
 	CommanderId     string `json:"commander-id" yaml:"commanderId" db:"commander_id"`
 }
 
+type Alias struct {
+	Alias       string `json:"alias" yaml:"alias" db:"alias"`
+	Tag         string `json:"tag" yaml:"tag" db:"tag"`
+	Server      int    `json:"server" yaml:"server" db:"server"`
+	Preferred   bool   `json:"preferred" yaml:"preferred" db:"preferred"`
+	CommanderId string `json:"commander-id" yaml:"commanderId" db:"commander_id"`
+}
+
 type DataMap map[string]Data
 
-func (c *Commander) Create(server int) error {
+func (c *Commander) Create() error {
 	var w wtid.WTID
-	w.New("wartracker", "commander", server)
+	w.New("wartracker", "commander", c.Server)
 	c.Id = string(w.Id)
-
-	date := time.Now().Format(time.DateOnly)
-
-	if d, ok := c.Data[date]; ok {
-		d.CommanderId = c.Id
-		d.Date = date
-		c.Data[date] = d
-	}
 
 	tx, err := db.Connection.Begin()
 	if err != nil {
 		return err
 	}
 
-	res, err := tx.Exec("INSERT INTO commander (id, note_name) VALUES (?, ?)",
+	res, err := tx.Exec("INSERT INTO commander (id, note_name, tag, server) VALUES (?, ?, ?, ?)",
 		c.Id,
-		c.NoteName)
+		c.NoteName,
+		c.Tag,
+		c.Server)
 	if err != nil {
 		return err
 	}
@@ -60,7 +64,7 @@ func (c *Commander) Create(server int) error {
 		return err
 	}
 	if x != 1 {
-		return fmt.Errorf("failed to insert alliance")
+		return fmt.Errorf("failed to insert commander")
 	}
 	err = tx.Commit()
 	if err != nil {
@@ -71,26 +75,13 @@ func (c *Commander) Create(server int) error {
 	if err != nil {
 		return err
 	}
-	res, err = tx.Exec(`INSERT INTO commander_data (
-		date, 
-		hq_level, 
-		likes, 
-		hq_power, 
-		kills, 
-		profession_level, 
-		total_hero_power, 
-		commander_id,
-		alliance_id
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		c.Data[date].Date,
-		c.Data[date].HQLevel,
-		c.Data[date].Likes,
-		c.Data[date].HQPower,
-		c.Data[date].Kills,
-		c.Data[date].ProfessionLevel,
-		c.Data[date].TotalHeroPower,
-		c.Data[date].CommanderId,
-		c.Data[date].AllianceId)
+	res, err = tx.Exec(`INSERT INTO commander_aliases (
+		alias, 
+		tag, 
+		server, 
+		commander_id 
+		) VALUES (?, ?, ?, ?)`,
+		c.NoteName, c.Tag, c.Server, c.Id)
 	if err != nil {
 		return err
 	}
@@ -99,7 +90,7 @@ func (c *Commander) Create(server int) error {
 		return err
 	}
 	if x != 1 {
-		return fmt.Errorf("failed to insert commander data")
+		return fmt.Errorf("failed to insert alias")
 	}
 	err = tx.Commit()
 	if err != nil {
@@ -109,7 +100,7 @@ func (c *Commander) Create(server int) error {
 	return nil
 }
 
-func (c *Commander) Update() error {
+func (c *Commander) AddData() error {
 	if len(c.Data) < 1 {
 		return fmt.Errorf("data for commander [%s] is empty", c.NoteName)
 	}
@@ -155,13 +146,20 @@ func (c *Commander) Update() error {
 	return nil
 }
 
-func (c *Commander) GetById(id string) error {
+func (c *Commander) GetById(id string, latest ...bool) error {
 	err := db.Connection.QueryRowx("SELECT * FROM commander WHERE id=?", id).StructScan(c)
 	if err != nil {
 		return err
 	}
 
-	rows, err := db.Connection.Queryx("SELECT * FROM commander_data WHERE commander_id=? ORDER BY date DESC", id)
+	q := "SELECT * FROM commander_data WHERE commander_id=? ORDER BY date DESC"
+	if len(latest) > 0 {
+		if latest[0] {
+			q += " LIMIT 1"
+		}
+	}
+
+	rows, err := db.Connection.Queryx(q, id)
 	if err != nil {
 		return err
 	}
@@ -177,20 +175,47 @@ func (c *Commander) GetById(id string) error {
 	return nil
 }
 
-func (c *Commander) GetByNoteName(n string) error {
+func (c *Commander) GetByAlias(n string, latest ...bool) error {
 	var id string
 
-	err := db.Connection.QueryRowx("SELECT id FROM commander WHERE note_name=?", n).Scan(&id)
+	err := db.Connection.QueryRowx("SELECT commander_id FROM commander_aliases WHERE alias=?", n).Scan(&id)
 	if err != nil {
 		return err
 	}
 
-	err = c.GetById(id)
+	if len(latest) > 0 {
+		if latest[0] {
+			err = c.GetById(id, latest[0])
+		} else {
+			err = c.GetById(id)
+		}
+	}
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// AddAlias adds an alias to the character's name list
+func (c *Commander) AddAlias(a string) error {
+	return fmt.Errorf("not implemented")
+}
+
+// SetNoteName sets the commander's note name (main name) to n.  If the note
+// name is not equal to the new name, the old note name is saved as alias if
+// needed.
+func (c *Commander) SetNoteName(n string) error {
+	return fmt.Errorf("not implemented")
+}
+
+// Merge will copy data and aliases from s to p and delete s, and add s.NoteName as an alias for p
+func Merge(p, s Commander) error {
+	return fmt.Errorf("not implemented")
+}
+
+func List() ([]Commander, error) {
+	return nil, fmt.Errorf("not implemented")
 }
 
 func (c *Commander) CommanderToJSON() ([]byte, error) {

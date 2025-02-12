@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"wartracker/api/wartracker-api/build"
+	"wartracker/pkg/build"
 	"wartracker/pkg/db"
 
 	"github.com/go-chi/chi/v5"
@@ -79,4 +79,6 @@ func initServer() {
 	root.Get("/", GetRoot)
 	root.Mount("/health", HealthRoutes())
 	root.Mount("/alliance", AllianceRoutes())
+	root.Mount("/commander", CommanderRoutes())
+	root.Mount("/vsduel", VsDuelRoutes())
 }

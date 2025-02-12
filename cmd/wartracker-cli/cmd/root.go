@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"os"
 	"wartracker/pkg/db"
-	"wartracker/pkg/scanner"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -37,14 +36,8 @@ const (
 
 var (
 	//Configuration variables
-	ConfigFile  string
-	DBFile      string
-	ScratchDir  string
-	Debug       bool
-	TessdataDir string
-	Languages   []string
-	MapDir      string
-	DayFile     string
+	ConfigFile string
+	DBFile     string
 )
 
 // RootCmd represents the base command when called without any subcommands
@@ -77,26 +70,11 @@ func init() {
 	// Configuration Flags
 	rootCmd.PersistentFlags().StringVar(&ConfigFile, "config", "", "config file (default is $HOME/.wartracker-cli.yaml)")
 	rootCmd.PersistentFlags().StringVar(&DBFile, "dbfile", "", "database file")
-	rootCmd.PersistentFlags().StringVar(&ScratchDir, "scratch", "", "Directory to store scratch files")
-	rootCmd.PersistentFlags().BoolVar(&Debug, "debug", false, "Directory to store scratch files")
-	rootCmd.PersistentFlags().StringVar(&TessdataDir, "tessdata", "", "Tesseract data directory")
-	rootCmd.PersistentFlags().StringSliceVar(&Languages, "languages", nil, "Tesseract languages to use")
-	rootCmd.PersistentFlags().StringVar(&MapDir, "mapdir", "", "Directory for command maps")
-	rootCmd.PersistentFlags().StringVar(&DayFile, "dayfile", "", "YAML file with vs day data")
+
 	cobra.CheckErr(viper.BindPFlag("dbfile", rootCmd.PersistentFlags().Lookup("dbfile")))
-	cobra.CheckErr(viper.BindPFlag("scratch", rootCmd.PersistentFlags().Lookup("scratch")))
-	cobra.CheckErr(viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug")))
-	cobra.CheckErr(viper.BindPFlag("tessdata", rootCmd.PersistentFlags().Lookup("tessdata")))
-	cobra.CheckErr(viper.BindPFlag("languages", rootCmd.PersistentFlags().Lookup("languages")))
-	cobra.CheckErr(viper.BindPFlag("mapdir", rootCmd.PersistentFlags().Lookup("mapdir")))
-	cobra.CheckErr(viper.BindPFlag("dayfile", rootCmd.PersistentFlags().Lookup("dayfile")))
+
 	viper.SetDefault("dbfile", "db/wartracker.db")
-	viper.SetDefault("scratch", "_scratch")
-	viper.SetDefault("debug", false)
-	viper.SetDefault("tessdata", "/Users/erumer/src/github.com/tesseract-ocr/tessdata")
-	viper.SetDefault("languages", nil)
-	viper.SetDefault("mapdir", "config/scanner/maps")
-	viper.SetDefault("dayfile", "config/vsduel/data/days.yaml")
+
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -123,12 +101,7 @@ func initConfig() {
 	}
 
 	initDB()
-	initScratch()
-	initDebug()
-	initLanguages()
-	initMapDir()
-	initTessdataDir()
-	initDayFile()
+
 }
 
 func initDB() {
@@ -137,46 +110,4 @@ func initDB() {
 	if err != nil {
 		panic(err)
 	}
-}
-
-func initScratch() {
-	ScratchDir = viper.GetString("scratch")
-	err := os.RemoveAll(ScratchDir)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "Unable to initialize scratch directory: ", ScratchDir)
-	}
-	err = os.MkdirAll(ScratchDir, 0755)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "Unable to initialize scratch directory: ", ScratchDir)
-	}
-
-	scanner.ScratchDir = ScratchDir
-}
-
-func initDebug() {
-	if viper.GetBool("debug") {
-		scanner.Debug = true
-		scanner.Process = os.Getpid()
-		scanner.ScratchDir = viper.GetString("scratch")
-	} else {
-		scanner.Debug = false
-	}
-}
-
-func initTessdataDir() {
-	TessdataDir = viper.GetString("tessdata")
-	scanner.TessdataDir = TessdataDir
-}
-
-func initLanguages() {
-	Languages = viper.GetStringSlice("languages")
-	scanner.Languages = Languages
-}
-
-func initMapDir() {
-	MapDir = viper.GetString("mapdir")
-}
-
-func initDayFile() {
-	DayFile = viper.GetString("dayfile")
 }

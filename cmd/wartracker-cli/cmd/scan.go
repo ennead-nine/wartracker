@@ -2,9 +2,38 @@ package cmd
 
 import (
 	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
 
 	"github.com/spf13/cobra"
 )
+
+func Scan(f string) {
+	data, err := os.Open(f)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer data.Close()
+
+	client := &http.Client{}
+	url := "http://localhost:3001/vsduel/scan/1/Monday?indent=true"
+	req, err := http.NewRequest("POST", url, data)
+	if err != nil {
+		log.Fatal(err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatal(err)
+	}
+	content, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("%s\n", string(content))
+}
 
 // commanderCmd represents the commander command
 var scanCmd = &cobra.Command{
@@ -14,7 +43,7 @@ var scanCmd = &cobra.Command{
 	game.  There are several data sets that can be scanned.  Use the --help 
 	flag to learn more more.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("scan called")
+		Scan(args[0])
 	},
 }
 
