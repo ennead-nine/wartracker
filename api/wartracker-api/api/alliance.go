@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
-	"strconv"
 
 	"wartracker/pkg/alliance"
 
@@ -14,11 +13,10 @@ import (
 type AllianceHandler struct {
 }
 
-func (h AllianceHandler) ListAlliances(w http.ResponseWriter, r *http.Request) {
+func (h AllianceHandler) List(w http.ResponseWriter, r *http.Request) {
 	indent := GetQueryBool(r, "indent")
-	data := GetQueryBool(r, "data")
 
-	as, err := alliance.List(data)
+	as, err := alliance.List()
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, ErrNoAliiances.Error(), http.StatusNotFound)
@@ -35,32 +33,14 @@ func (h AllianceHandler) ListAlliances(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h AllianceHandler) GetAlliance(w http.ResponseWriter, r *http.Request) {
+func (h AllianceHandler) Get(w http.ResponseWriter, r *http.Request) {
 	indent := GetQueryBool(r, "indent")
-	data := GetQueryBool(r, "data")
 	latest := GetQueryBool(r, "latest")
 
-	var err error
 	var a alliance.Alliance
 	a.Id = chi.URLParam(r, "id")
-	if latest {
-		err = a.Get(latest)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	} else if data {
-		err = a.Get()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		err = a.GetData()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
+
+	err := a.Get()
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, ErrAliianceNotFound.Error(), http.StatusNotFound)
@@ -70,6 +50,20 @@ func (h AllianceHandler) GetAlliance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if latest {
+		err = a.GetLatestData()
+	} else {
+		err = a.GetData()
+	}
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	err = jsonOutput(w, a, indent)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -77,30 +71,34 @@ func (h AllianceHandler) GetAlliance(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h AllianceHandler) CreateAlliance(w http.ResponseWriter, r *http.Request) {
+func (h AllianceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	indent := GetQueryBool(r, "indent")
 
 	var a alliance.Alliance
 
-	s := chi.URLParam(r, "server")
-	si, err := strconv.Atoi(s)
+	err := json.NewDecoder(r.Body).Decode(&a)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	a.Server = si
 
-	err = json.NewDecoder(r.Body).Decode(&a)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
 	err = a.Create()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	var date string
+	for k := range a.DataMap {
+		date = k
+	}
+
+	err = a.AddData(date, a.DataMap[date])
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	err = jsonOutput(w, a, indent)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -108,11 +106,31 @@ func (h AllianceHandler) CreateAlliance(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-func (h AllianceHandler) UpdateAlliance(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Update alliance not implemented ...\n"))
+func (h AllianceHandler) Update(w http.ResponseWriter, r *http.Request) {
+	indent := GetQueryBool(r, "indent")
+
+	var a alliance.Alliance
+
+	err := json.NewDecoder(r.Body).Decode(&a)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	err = a.Update()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = jsonOutput(w, a, indent)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
-func (h AllianceHandler) AddAllianceData(w http.ResponseWriter, r *http.Request) {
+func (h AllianceHandler) AddData(w http.ResponseWriter, r *http.Request) {
 	indent := GetQueryBool(r, "indent")
 
 	var a alliance.Alliance
@@ -129,8 +147,7 @@ func (h AllianceHandler) AddAllianceData(w http.ResponseWriter, r *http.Request)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	a.DataMap[d.Date] = d
-	err = a.AddData(d.Date)
+	err = a.AddData(d.Date, d)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -146,12 +163,12 @@ func (h AllianceHandler) AddAllianceData(w http.ResponseWriter, r *http.Request)
 func AllianceRoutes() chi.Router {
 	r := chi.NewRouter()
 
-	allianceHandler := AllianceHandler{}
-	r.Get("/", allianceHandler.ListAlliances)
-	r.Post("/{server}", allianceHandler.CreateAlliance)
-	r.Get("/{id}", allianceHandler.GetAlliance)
-	r.Put("/{id}", allianceHandler.UpdateAlliance)
-	r.Put("/{id}/data", allianceHandler.AddAllianceData)
+	h := AllianceHandler{}
+	r.Get("/", h.List)
+	r.Post("/", h.Create)
+	r.Get("/{id}", h.Get)
+	r.Put("/{id}", h.Update)
+	r.Put("/{id}/data", h.AddData)
 
 	return r
 }

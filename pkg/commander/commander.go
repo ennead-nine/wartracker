@@ -3,19 +3,18 @@ package commander
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 	"wartracker/pkg/db"
+	"wartracker/pkg/warzone"
 	"wartracker/pkg/wtid"
 
 	"gopkg.in/yaml.v3"
 )
 
 type Commander struct {
-	Id       string  `json:"id" yaml:"id" db:"id"`
-	NoteName string  `json:"note-name" yaml:"noteName" db:"note_name"`
-	Tag      string  `json:"tag" yaml:"tag" db:"tag"`
-	Server   int     `json:"server" yaml:"server" db:"server"`
-	Data     DataMap `json:"data" yaml:"data"`
+	Id        string  `json:"id" yaml:"id" db:"id"`
+	Name      string  `json:"name" yaml:"name" db:"name"`
+	WarzoneId string  `json:"warzone-id" yaml:"warzone-id" db:"warzone_id"`
+	Data      DataMap `json:"data" yaml:"data"`
 }
 
 type Data struct {
@@ -34,63 +33,91 @@ type Data struct {
 type Alias struct {
 	Alias       string `json:"alias" yaml:"alias" db:"alias"`
 	Tag         string `json:"tag" yaml:"tag" db:"tag"`
-	Server      int    `json:"server" yaml:"server" db:"server"`
 	Preferred   bool   `json:"preferred" yaml:"preferred" db:"preferred"`
 	CommanderId string `json:"commander-id" yaml:"commanderId" db:"commander_id"`
 }
 
 type DataMap map[string]Data
+type CommanderMap map[string]Commander
 
 func (c *Commander) Create() error {
+	var z warzone.Warzone
+	z.Id = c.WarzoneId
+	err := z.Get()
+	if err != nil {
+		return fmt.Errorf("unable to lookup warzone %s: %w", c.WarzoneId, err)
+	}
+
 	var w wtid.WTID
-	w.New("wartracker", "commander", c.Server)
+	w.New("wartracker", "commander", z.Server)
 	c.Id = string(w.Id)
 
 	tx, err := db.Connection.Begin()
 	if err != nil {
 		return err
 	}
-
-	res, err := tx.Exec("INSERT INTO commander (id, note_name, tag, server) VALUES (?, ?, ?, ?)",
+	res, err := tx.Exec("INSERT INTO commander (id, name, warzone_id) VALUES (?, ?, ?)",
 		c.Id,
-		c.NoteName,
-		c.Tag,
-		c.Server)
+		c.Name,
+		c.WarzoneId)
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 	x, err := res.RowsAffected()
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 	if x != 1 {
-		return fmt.Errorf("failed to insert commander")
+		tx.Rollback()
+		return fmt.Errorf("failed to insert commander: unknown error")
 	}
 	err = tx.Commit()
 	if err != nil {
 		return err
 	}
 
-	tx, err = db.Connection.Begin()
+	return c.AddAlias(c.Name, true)
+}
+
+func (c *Commander) AddAlias(n string, p bool) error {
+	if p {
+		tx, err := db.Connection.Begin()
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec("UPDATE commander_alias SET preferred = false WHERE commander_id = ?", c.Id)
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to update preferred alias for %s: %w", c.Id, err)
+		}
+		err = tx.Commit()
+		if err != nil {
+			return err
+		}
+	}
+	tx, err := db.Connection.Begin()
 	if err != nil {
 		return err
 	}
-	res, err = tx.Exec(`INSERT INTO commander_aliases (
+	res, err := tx.Exec(`INSERT INTO commander_alias (
 		alias, 
-		tag, 
-		server, 
+		preferred,
 		commander_id 
-		) VALUES (?, ?, ?, ?)`,
-		c.NoteName, c.Tag, c.Server, c.Id)
+		) VALUES (?, ?, ?)`,
+		n, p, c.Id)
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
-	x, err = res.RowsAffected()
+	x, err := res.RowsAffected()
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 	if x != 1 {
-		return fmt.Errorf("failed to insert alias")
+		return fmt.Errorf("failed to insert alias: unknown error")
 	}
 	err = tx.Commit()
 	if err != nil {
@@ -100,18 +127,29 @@ func (c *Commander) Create() error {
 	return nil
 }
 
-func (c *Commander) AddData() error {
-	if len(c.Data) < 1 {
-		return fmt.Errorf("data for commander [%s] is empty", c.NoteName)
+func (c *Commander) GetAliases() ([]Alias, error) {
+	var as []Alias
+
+	q := "SELECT * FROM commander_alias WHERE id=?"
+	rows, err := db.Connection.Queryx(q, c.Id)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get aliases for %s, %w", c.Id, err)
+	}
+	for rows.Next() {
+		var a Alias
+		err = rows.StructScan(&a)
+		if err != nil {
+			return nil, err
+		}
+		as = append(as, a)
 	}
 
-	date := time.Now().Format("2006-01-02")
+	return as, nil
+}
 
-	if d, ok := c.Data[date]; ok {
-		d.CommanderId = c.Id
-		d.Date = date
-		c.Data[date] = d
-	}
+func (c *Commander) AddData(date string, d Data) error {
+	c.Data = make(DataMap)
+	c.Data[date] = d
 
 	tx, err := db.Connection.Begin()
 	if err != nil {
@@ -146,22 +184,11 @@ func (c *Commander) AddData() error {
 	return nil
 }
 
-func (c *Commander) GetById(id string, latest ...bool) error {
-	err := db.Connection.QueryRowx("SELECT * FROM commander WHERE id=?", id).StructScan(c)
+func (c *Commander) GetData() error {
+	q := "SELECT * from commander_data WHERE commander_id=?"
+	rows, err := db.Connection.Queryx(q, c.Id)
 	if err != nil {
-		return err
-	}
-
-	q := "SELECT * FROM commander_data WHERE commander_id=? ORDER BY date DESC"
-	if len(latest) > 0 {
-		if latest[0] {
-			q += " LIMIT 1"
-		}
-	}
-
-	rows, err := db.Connection.Queryx(q, id)
-	if err != nil {
-		return err
+		return fmt.Errorf("unable to get data for %s, %w", c.Name, err)
 	}
 	for rows.Next() {
 		var d Data
@@ -175,21 +202,44 @@ func (c *Commander) GetById(id string, latest ...bool) error {
 	return nil
 }
 
-func (c *Commander) GetByAlias(n string, latest ...bool) error {
-	var id string
-
-	err := db.Connection.QueryRowx("SELECT commander_id FROM commander_aliases WHERE alias=?", n).Scan(&id)
+func (c *Commander) GetLatestData() error {
+	q := "SELECT * from commander_data WHERE commander_id=? ORDER BY date DESC LIMIT 1"
+	rows, err := db.Connection.Queryx(q, c.Id)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to get latest data for commander %s, %w", c.Name, err)
+	}
+	for rows.Next() {
+		var d Data
+		err = rows.StructScan(&d)
+		if err != nil {
+			return err
+		}
+		c.Data[d.Date] = d
 	}
 
-	if len(latest) > 0 {
-		if latest[0] {
-			err = c.GetById(id, latest[0])
-		} else {
-			err = c.GetById(id)
-		}
+	return nil
+}
+
+func (c *Commander) GetDataByDate(date string) error {
+	q := "SELECT * from commander_data WHERE commander_id=? AND date=\"?\""
+	rows, err := db.Connection.Queryx(q, c.Id, date)
+	if err != nil {
+		return fmt.Errorf("unable to get latest data for commander %s, %w", c.Name, err)
 	}
+	for rows.Next() {
+		var d Data
+		err = rows.StructScan(&d)
+		if err != nil {
+			return err
+		}
+		c.Data[d.Date] = d
+	}
+
+	return nil
+}
+
+func (c *Commander) Get() error {
+	err := db.Connection.QueryRowx("SELECT * FROM commander WHERE id=?", c.Id).StructScan(c)
 	if err != nil {
 		return err
 	}
@@ -197,25 +247,242 @@ func (c *Commander) GetByAlias(n string, latest ...bool) error {
 	return nil
 }
 
-// AddAlias adds an alias to the character's name list
-func (c *Commander) AddAlias(a string) error {
-	return fmt.Errorf("not implemented")
+func (c *Commander) Update() error {
+	var z warzone.Warzone
+	z.Id = c.WarzoneId
+	err := z.Get()
+	if err != nil {
+		return fmt.Errorf("error looking up warzone %s: %w", c.WarzoneId, err)
+	}
+
+	tx, err := db.Connection.Begin()
+	if err != nil {
+		return err
+	}
+	res, err := tx.Exec("UPDATE commander SET name=?, warzone_id=? WHERE id=?",
+		c.Name,
+		c.WarzoneId,
+		c.Id)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	x, err := res.RowsAffected()
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	if x != 1 {
+		tx.Rollback()
+		return fmt.Errorf("unable to update commander [%s]: %w", c.Name, db.ErrDbErrorUnknown)
+	}
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	return c.AddAlias(c.Name, true)
 }
 
-// SetNoteName sets the commander's note name (main name) to n.  If the note
-// name is not equal to the new name, the old note name is saved as alias if
-// needed.
-func (c *Commander) SetNoteName(n string) error {
-	return fmt.Errorf("not implemented")
+func (c *Commander) GetByName(n string) error {
+	var id string
+
+	err := db.Connection.QueryRowx("SELECT DISTINCT commander_id FROM commander_alias WHERE alias=?", n).Scan(&id)
+	if err != nil {
+		return err
+	}
+
+	c.Id = id
+	err = c.Get()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Merge will copy data and aliases from s to p and delete s, and add s.NoteName as an alias for p
 func Merge(p, s Commander) error {
-	return fmt.Errorf("not implemented")
+	sas, err := s.GetAliases()
+	if err != nil {
+		return err
+	}
+	for _, sa := range sas {
+		err = p.AddAlias(sa.Alias, false)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = s.GetData()
+	if err != nil {
+		return err
+	}
+	for _, sd := range s.Data {
+		err = p.AddData(sd.Date, sd)
+		if err != nil {
+			return err
+		}
+	}
+
+	return s.Delete()
 }
 
-func List() ([]Commander, error) {
-	return nil, fmt.Errorf("not implemented")
+func (c *Commander) DeleteData(date string) error {
+	tx, err := db.Connection.Begin()
+	if err != nil {
+		return err
+	}
+	res, err := tx.Exec("DELETE FROM commander_data WHERE date=? AND commander_id=?",
+		date,
+		c.Id)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	x, err := res.RowsAffected()
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	if x != 1 {
+		tx.Rollback()
+		return fmt.Errorf("unable to delete commander data for [%s] for %s: %w", c.Name, date, db.ErrDbErrorUnknown)
+	}
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	delete(c.Data, date)
+	return nil
+}
+
+func (c *Commander) DeleteAlias(alias string) error {
+	tx, err := db.Connection.Begin()
+	if err != nil {
+		return err
+	}
+	res, err := tx.Exec("DELETE FROM commander_alias WHERE alias=? AND commander_id=?",
+		alias,
+		c.Id)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	x, err := res.RowsAffected()
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	if x != 1 {
+		tx.Rollback()
+		return fmt.Errorf("unable to delete alias for [%s] for %s: %w", c.Name, alias, db.ErrDbErrorUnknown)
+	}
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Commander) Delete() error {
+	as, err := c.GetAliases()
+	if err != nil {
+		return err
+	}
+	for _, a := range as {
+		err = c.DeleteAlias(a.Alias)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = c.GetData()
+	if err != nil {
+		return err
+	}
+	for _, cd := range c.Data {
+		err = c.DeleteData(cd.Date)
+		if err != nil {
+			return err
+		}
+	}
+
+	tx, err := db.Connection.Begin()
+	if err != nil {
+		return err
+	}
+	res, err := tx.Exec("DELETE FROM commander WHERE commander_id=?",
+		c.Id)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	x, err := res.RowsAffected()
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	if x != 1 {
+		tx.Rollback()
+		return fmt.Errorf("unable to delete commander %s: %w", c.Id, db.ErrDbErrorUnknown)
+	}
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func List() (CommanderMap, error) {
+	var cs = make(CommanderMap)
+
+	rows, err := db.Connection.Queryx("SELECT * FROM commander")
+
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var c Commander
+		err = rows.StructScan(&c)
+		if err != nil {
+			return nil, err
+		}
+		cs[c.Id] = c
+	}
+
+	return cs, nil
+}
+
+func ListByAlliance(a string) (CommanderMap, error) {
+	var cs = make(CommanderMap)
+
+	rows, err := db.Connection.Queryx("SELECT DISTINCT commander_id FROM commander_data WHERE alliance_id")
+
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var c Commander
+		var i string
+
+		err = rows.Scan(&i)
+		if err != nil {
+			return nil, err
+		}
+
+		c.Id = i
+		err = c.Get()
+		if err != nil {
+			return nil, fmt.Errorf("error getting commander %s: %w", i, err)
+		}
+		cs[c.Id] = c
+	}
+
+	return cs, nil
 }
 
 func (c *Commander) CommanderToJSON() ([]byte, error) {

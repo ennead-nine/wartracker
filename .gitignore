@@ -1,5 +1,8 @@
 *.db
+*.sqlite3
 _data
 _bin
 _scratch
+dist/*
+dist/ui
 .wartracker*

@@ -40,6 +40,7 @@ func init() {
 	initConfig()
 	initDb()
 	initServer()
+	initVsDuel()
 }
 
 func initConfig() {
@@ -78,6 +79,7 @@ func initServer() {
 	root.Use(middleware.Logger)
 	root.Get("/", GetRoot)
 	root.Mount("/health", HealthRoutes())
+	root.Mount("/warzone", WarzoneRoutes())
 	root.Mount("/alliance", AllianceRoutes())
 	root.Mount("/commander", CommanderRoutes())
 	root.Mount("/vsduel", VsDuelRoutes())

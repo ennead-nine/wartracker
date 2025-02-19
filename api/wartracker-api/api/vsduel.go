@@ -5,10 +5,23 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"wartracker/pkg/vsduel"
 
 	"github.com/go-chi/chi/v5"
 )
+
+func init() {
+	initVsDuel()
+}
+
+func initVsDuel() {
+	var err error
+	vsduel.Days, err = vsduel.GetDays()
+	if err != nil {
+		panic(err)
+	}
+}
 
 type VsDuelHandler struct {
 }
@@ -17,12 +30,10 @@ func (h VsDuelHandler) ListVsDuel(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, ErrNotImplemented.Error(), http.StatusNotImplemented)
 }
 
-func (h VsDuelHandler) GetVsDuel(w http.ResponseWriter, r *http.Request) {
+func (h VsDuelHandler) Get(w http.ResponseWriter, r *http.Request) {
 	indent := GetQueryBool(r, "indent")
 
-	var err error
-	var vs vsduel.VsDuel
-	err = vs.GetById(chi.URLParam(r, "id"))
+	vs, err := vsduel.Get(chi.URLParam(r, "id"))
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, ErrVsDuelNotFound.Error(), http.StatusNotFound)
@@ -83,15 +94,74 @@ func (h VsDuelHandler) ScanVsDay(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	var d vsduel.VsDuel
-
-	d.GetById(chi.URLParam(r, "id"))
-	cd, err := d.ScanPointsRanking(z, chi.URLParam(r, "day"))
+	vd, err := vsduel.Get(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		if err == sql.ErrNoRows {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
-	jsonOutput(w, cd, indent)
+	err = vd.GetWeeks()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	week, err := strconv.Atoi(chi.URLParam(r, "week"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if k, ok := vd.Weeks[week]; ok {
+		err = k.StartDay(chi.URLParam(r, "day"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		err = k.ScanPointsRanking(z, chi.URLParam(r, "day"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		vd.Weeks[week] = k
+	}
+
+	jsonOutput(w, vd.Weeks[week].Data[chi.URLParam(r, "day")], indent)
+}
+
+func (h VsDuelHandler) StartVsWeek(w http.ResponseWriter, r *http.Request) {
+	indent := GetQueryBool(r, "indent")
+
+	var k vsduel.Week
+	err := json.NewDecoder(r.Body).Decode(&k)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	vs, err := vsduel.Get(k.VsDuelId)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		} else {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	err = vs.StartWeek(k.WeekNumber, k.AllianceIds)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	jsonOutput(w, vs.Weeks[k.WeekNumber], indent)
 }
 
 func VsDuelRoutes() chi.Router {
@@ -100,10 +170,10 @@ func VsDuelRoutes() chi.Router {
 	vsDuelHandler := VsDuelHandler{}
 	r.Get("/", vsDuelHandler.ListVsDuel)
 	r.Post("/", vsDuelHandler.CreateVsDuel)
-	r.Post("/scan/{id}/{day}", vsDuelHandler.ScanVsDay)
-	r.Get("/{id}", vsDuelHandler.GetVsDuel)
+	r.Post("/week", vsDuelHandler.StartVsWeek)
+	r.Post("/scan/{id}/{week}/{day}", vsDuelHandler.ScanVsDay)
+	r.Get("/{id}", vsDuelHandler.Get)
 	r.Put("/{id}", vsDuelHandler.UpdateVsDuel)
-	r.Put("/{id}/commanderdata", vsDuelHandler.AddVsCommanderData)
 
 	return r
 }

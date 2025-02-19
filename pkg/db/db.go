@@ -1,12 +1,15 @@
 package db
 
 import (
+	"errors"
+
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 var (
-	Connection *sqlx.DB
+	Connection        *sqlx.DB
+	ErrDbErrorUnknown = errors.New("an unknown database error occured")
 )
 
 func Connect(f string) (*sqlx.DB, error) {

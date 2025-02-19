@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
-	"strconv"
 
 	"wartracker/pkg/commander"
 
@@ -14,7 +13,7 @@ import (
 type CommanderHandler struct {
 }
 
-func (h CommanderHandler) ListCommanders(w http.ResponseWriter, r *http.Request) {
+func (h CommanderHandler) List(w http.ResponseWriter, r *http.Request) {
 	indent := GetQueryBool(r, "indent")
 
 	as, err := commander.List()
@@ -34,17 +33,16 @@ func (h CommanderHandler) ListCommanders(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (h CommanderHandler) GetCommander(w http.ResponseWriter, r *http.Request) {
+func (h CommanderHandler) Get(w http.ResponseWriter, r *http.Request) {
 	indent := GetQueryBool(r, "indent")
-	latest := GetQueryBool(r, "latest")
 
 	var err error
 	var c commander.Commander
 	c.Id = chi.URLParam(r, "id")
-	err = c.GetById(c.Id, latest)
+	err = c.Get()
 	if err != nil {
 		if err == sql.ErrNoRows {
-			http.Error(w, ErrAliianceNotFound.Error(), http.StatusNotFound)
+			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -58,20 +56,12 @@ func (h CommanderHandler) GetCommander(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h CommanderHandler) CreateCommander(w http.ResponseWriter, r *http.Request) {
+func (h CommanderHandler) Create(w http.ResponseWriter, r *http.Request) {
 	indent := GetQueryBool(r, "indent")
 
 	var c commander.Commander
 
-	s := chi.URLParam(r, "server")
-	si, err := strconv.Atoi(s)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	c.Server = si
-
-	err = json.NewDecoder(r.Body).Decode(&c)
+	err := json.NewDecoder(r.Body).Decode(&c)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -89,28 +79,88 @@ func (h CommanderHandler) CreateCommander(w http.ResponseWriter, r *http.Request
 	}
 }
 
-func (h CommanderHandler) ListAllianceCommanders(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("List alliance Commanders not implemented ...\n"))
+func (h CommanderHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
+	indent := GetQueryBool(r, "indent")
+
+	id := chi.URLParam(r, "allianceid")
+
+	cs, err := commander.ListByAlliance(id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = jsonOutput(w, cs, indent)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
-func (h CommanderHandler) MergeCommanders(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("List alliance Commanders not implemented ...\n"))
+func (h CommanderHandler) Merge(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("Merge Commanders not implemented ...\n"))
 }
 
-func (h CommanderHandler) GetCommanderByName(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Get Commander by name not implemented ...\n"))
+func (h CommanderHandler) GetByName(w http.ResponseWriter, r *http.Request) {
+	indent := GetQueryBool(r, "indent")
+
+	var err error
+	var c commander.Commander
+
+	name := chi.URLParam(r, "name")
+	err = c.GetByName(name)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = jsonOutput(w, c, indent)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
-func (h CommanderHandler) UpdateCommander(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Update Commander not implemented ...\n"))
+func (h CommanderHandler) Update(w http.ResponseWriter, r *http.Request) {
+	indent := GetQueryBool(r, "indent")
+
+	var c commander.Commander
+
+	err := json.NewDecoder(r.Body).Decode(&c)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	err = c.Update()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = jsonOutput(w, c, indent)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
-func (h CommanderHandler) AddCommanderData(w http.ResponseWriter, r *http.Request) {
+func (h CommanderHandler) AddData(w http.ResponseWriter, r *http.Request) {
 	indent := GetQueryBool(r, "indent")
 
 	var c commander.Commander
 	c.Id = chi.URLParam(r, "id")
-	err := c.GetById(c.Id)
+
+	date := chi.URLParam(r, "date")
+
+	err := c.Get()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -122,7 +172,7 @@ func (h CommanderHandler) AddCommanderData(w http.ResponseWriter, r *http.Reques
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	err = c.AddData()
+	err = c.AddData(date, d)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -138,15 +188,15 @@ func (h CommanderHandler) AddCommanderData(w http.ResponseWriter, r *http.Reques
 func CommanderRoutes() chi.Router {
 	r := chi.NewRouter()
 
-	CommanderHandler := CommanderHandler{}
-	r.Get("/", CommanderHandler.ListCommanders)
-	r.Get("/a/{allianceid}", CommanderHandler.ListAllianceCommanders)
-	r.Get("/n/{name}", CommanderHandler.GetCommanderByName)
-	r.Post("/{server}", CommanderHandler.CreateCommander)
-	r.Get("/{id}", CommanderHandler.GetCommander)
-	r.Put("/{id}", CommanderHandler.UpdateCommander)
-	r.Put("/{id}/data", CommanderHandler.AddCommanderData)
-	r.Put("/{id}/m/{id2}", CommanderHandler.MergeCommanders)
+	h := CommanderHandler{}
+	r.Get("/", h.List)
+	r.Get("/a/{allianceid}", h.ListMembers)
+	r.Get("/n/{name}", h.GetByName)
+	r.Post("/{server}", h.Create)
+	r.Get("/{id}", h.Get)
+	r.Put("/{id}", h.Update)
+	r.Put("/{id}/data/{date}", h.AddData)
+	r.Put("/{id}/m/{id2}", h.Merge)
 
 	return r
 }
