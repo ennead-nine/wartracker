@@ -47,7 +47,6 @@ type Data struct {
 	Power       int64  `json:"power" yaml:"power" db:"power"`
 	GiftLevel   int    `json:"gift-level" yaml:"giftLevel" db:"gift_level"`
 	MemberCount int    `json:"member-count" yaml:"memberCount" db:"member_count"`
-	R5Id        string `json:"r5-id" yaml:"r5Id" db:"r5_id"`
 	AllianceId  string `json:"alliance-id" yaml:"allianceId" db:"alliance_id"`
 }
 
@@ -194,13 +193,12 @@ func (a *Alliance) AddData(date string, d Data) error {
 	if err != nil {
 		return err
 	}
-	res, err := tx.Exec("INSERT INTO alliance_data (name, date, power, gift_level, member_count, r5_id, alliance_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+	res, err := tx.Exec("INSERT INTO alliance_data (name, date, power, gift_level, member_count, alliance_id) VALUES (?, ?, ?, ?, ?, ?)",
 		a.DataMap[date].Name,
 		a.DataMap[date].Date,
 		a.DataMap[date].Power,
 		a.DataMap[date].GiftLevel,
 		a.DataMap[date].MemberCount,
-		a.DataMap[date].R5Id,
 		a.Id)
 	if err != nil {
 		tx.Rollback()

@@ -1,6 +1,7 @@
 package commander
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"wartracker/pkg/db"
@@ -26,6 +27,7 @@ type Data struct {
 	Kills           int    `json:"kills" yaml:"kills" db:"kills"`
 	ProfessionLevel int    `json:"profession-level" yaml:"professionLevel" db:"profession_level"`
 	TotalHeroPower  int    `json:"total-hero-power" yaml:"totalHeroPower" db:"total_hero_power"`
+	AllianceRank    int    `json:"alliance-rank" yaml:"allianceRank" db:"alliance_rank"`
 	AllianceId      string `json:"alliance-id" yaml:"allianceId" db:"alliance_id"`
 	CommanderId     string `json:"commander-id" yaml:"commanderId" db:"commander_id"`
 }
@@ -102,19 +104,20 @@ func (c *Commander) AddAlias(n string, p bool) error {
 		return err
 	}
 	res, err := tx.Exec(`INSERT INTO commander_alias (
-		alias, 
+		alias,
+		tag,
 		preferred,
 		commander_id 
-		) VALUES (?, ?, ?)`,
-		n, p, c.Id)
+		) VALUES (?, ?, ?, ?)`,
+		n, "NA", p, c.Id)
 	if err != nil {
 		tx.Rollback()
-		return err
+		return fmt.Errorf("failed to add alias for %s: %w", c.Id, err)
 	}
 	x, err := res.RowsAffected()
 	if err != nil {
 		tx.Rollback()
-		return err
+		return fmt.Errorf("failed to add alias for %s: %w", c.Id, err)
 	}
 	if x != 1 {
 		return fmt.Errorf("failed to insert alias: unknown error")
@@ -130,7 +133,7 @@ func (c *Commander) AddAlias(n string, p bool) error {
 func (c *Commander) GetAliases() ([]Alias, error) {
 	var as []Alias
 
-	q := "SELECT * FROM commander_alias WHERE id=?"
+	q := "SELECT * FROM commander_alias WHERE commander_id=?"
 	rows, err := db.Connection.Queryx(q, c.Id)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get aliases for %s, %w", c.Id, err)
@@ -139,7 +142,8 @@ func (c *Commander) GetAliases() ([]Alias, error) {
 		var a Alias
 		err = rows.StructScan(&a)
 		if err != nil {
-			return nil, err
+			rows.Close()
+			return nil, fmt.Errorf("failed to get aliases for %s: %w", c.Id, err)
 		}
 		as = append(as, a)
 	}
@@ -156,7 +160,7 @@ func (c *Commander) AddData(date string, d Data) error {
 		return err
 	}
 
-	res, err := tx.Exec("INSERT INTO commander_data (date, hq_level, likes, hq_power, kills, profession_level, total_hero_power, alliance_id, commander_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+	res, err := tx.Exec("INSERT INTO commander_data (date, hq_level, likes, hq_power, kills, profession_level, total_hero_power, alliance_rank, alliance_id, commander_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		c.Data[date].Date,
 		c.Data[date].HQLevel,
 		c.Data[date].Likes,
@@ -164,6 +168,7 @@ func (c *Commander) AddData(date string, d Data) error {
 		c.Data[date].Kills,
 		c.Data[date].ProfessionLevel,
 		c.Data[date].TotalHeroPower,
+		c.Data[date].AllianceRank,
 		c.Data[date].AllianceId,
 		c.Id)
 	if err != nil {
@@ -185,6 +190,7 @@ func (c *Commander) AddData(date string, d Data) error {
 }
 
 func (c *Commander) GetData() error {
+	c.Data = make(DataMap)
 	q := "SELECT * from commander_data WHERE commander_id=?"
 	rows, err := db.Connection.Queryx(q, c.Id)
 	if err != nil {
@@ -267,14 +273,10 @@ func (c *Commander) Update() error {
 		tx.Rollback()
 		return err
 	}
-	x, err := res.RowsAffected()
+	_, err = res.RowsAffected()
 	if err != nil {
 		tx.Rollback()
 		return err
-	}
-	if x != 1 {
-		tx.Rollback()
-		return fmt.Errorf("unable to update commander [%s]: %w", c.Name, db.ErrDbErrorUnknown)
 	}
 	err = tx.Commit()
 	if err != nil {
@@ -302,7 +304,24 @@ func (c *Commander) GetByName(n string) error {
 }
 
 // Merge will copy data and aliases from s to p and delete s, and add s.NoteName as an alias for p
-func Merge(p, s Commander) error {
+func Merge(src, dst string) error {
+	var s Commander
+	s.Id = src
+	err := s.Get()
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil
+		}
+		return fmt.Errorf("failed to merge commander from %s to %s: %w", src, dst, err)
+	}
+
+	var p Commander
+	p.Id = dst
+	err = p.Get()
+	if err != nil {
+		return fmt.Errorf("failed to merge commander from %s to %s: %w", src, dst, err)
+	}
+
 	sas, err := s.GetAliases()
 	if err != nil {
 		return err
@@ -340,14 +359,10 @@ func (c *Commander) DeleteData(date string) error {
 		tx.Rollback()
 		return err
 	}
-	x, err := res.RowsAffected()
+	_, err = res.RowsAffected()
 	if err != nil {
 		tx.Rollback()
 		return err
-	}
-	if x != 1 {
-		tx.Rollback()
-		return fmt.Errorf("unable to delete commander data for [%s] for %s: %w", c.Name, date, db.ErrDbErrorUnknown)
 	}
 	err = tx.Commit()
 	if err != nil {
@@ -370,14 +385,10 @@ func (c *Commander) DeleteAlias(alias string) error {
 		tx.Rollback()
 		return err
 	}
-	x, err := res.RowsAffected()
+	_, err = res.RowsAffected()
 	if err != nil {
 		tx.Rollback()
 		return err
-	}
-	if x != 1 {
-		tx.Rollback()
-		return fmt.Errorf("unable to delete alias for [%s] for %s: %w", c.Name, alias, db.ErrDbErrorUnknown)
 	}
 	err = tx.Commit()
 	if err != nil {
@@ -414,20 +425,16 @@ func (c *Commander) Delete() error {
 	if err != nil {
 		return err
 	}
-	res, err := tx.Exec("DELETE FROM commander WHERE commander_id=?",
+	res, err := tx.Exec("DELETE FROM commander WHERE id=?",
 		c.Id)
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
-	x, err := res.RowsAffected()
+	_, err = res.RowsAffected()
 	if err != nil {
 		tx.Rollback()
 		return err
-	}
-	if x != 1 {
-		tx.Rollback()
-		return fmt.Errorf("unable to delete commander %s: %w", c.Id, db.ErrDbErrorUnknown)
 	}
 	err = tx.Commit()
 	if err != nil {

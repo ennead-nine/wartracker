@@ -21,10 +21,8 @@ CREATE TABLE IF NOT EXISTS "alliance_data"(
   "power"	        INTEGER,
   "gift_level"	  INTEGER,
   "member_count"	INTEGER,
-  "r5_id"	        TEXT,
   "alliance_id"	  TEXT NOT NULL,
-  FOREIGN KEY("alliance_id") REFERENCES "alliance"("id"),
-  FOREIGN KEY("r5_id") REFERENCES "commander"("id")
+  FOREIGN KEY("alliance_id") REFERENCES "alliance"("id")
 );
 CREATE TABLE IF NOT EXISTS "alliance_alias"(
   "alias"       TEXT,
@@ -54,6 +52,10 @@ CREATE TABLE IF NOT EXISTS "commander_data"(
   "kills"	            INTEGER,
   "profession_level"	INTEGER,
   "total_hero_power"	INTEGER,
+  "alliance_rank"     INTEGER
+     CHECK (
+      "alliance_rank" IN (0, 1, 2, 3, 4, 5)
+    ),
   "alliance_id"	      TEXT,
   "commander_id"	    TEXT,
   FOREIGN KEY("alliance_id") REFERENCES "alliance"("id"),
@@ -137,6 +139,7 @@ CREATE TABLE IF NOT EXISTS "vsduel_commander_data"(
     CHECK (
       "new" IN (0, 1)
     ),
+  "name"            TEXT,
   "alliance_id"     TEXT NOT NULL,
   "commander_id"	  TEXT NOT NULL,
   "vsduel_data_id"	TEXT NOT NULL,

@@ -54,16 +54,17 @@ type AllianceData struct {
 	Points       int    `json:"points" yaml:"points" db:"points"`
 	VsDuelPoints int    `json:"vsduel-points" yaml:"vsDuelPoints" db:"vsduel_points"`
 	AllianceId   string `json:"alliance-id" yaml:"allianceId" db:"alliance_id"`
-	VsDuelDataId string `json:"vsduel-data-id" yaml:"vsDuelDataId" db:"vsduel-data-id"`
+	VsDuelDataId string `json:"vsduel-data-id" yaml:"vsDuelDataId" db:"vsduel_data_id"`
 }
 
 type CommanderData struct {
 	Points       int    `json:"points" yaml:"points" db:"points"`
 	Rank         int    `json:"rank" yaml:"rank" db:"rank"`
 	New          bool   `json:"new" yaml:"new" db:"new"`
+	Name         string `json:"name" yaml:"name" db:"name"`
 	AllianceId   string `json:"alliance-id" yaml:"allianceid" db:"alliance_id"`
 	CommanderId  string `json:"commander-id" yaml:"commanderId" db:"commander_id"`
-	VsDuelDataId string `json:"vsduel-data-id" yaml:"vsDuelDataId" db:"vsduel-data-id"`
+	VsDuelDataId string `json:"vsduel-data-id" yaml:"vsDuelDataId" db:"vsduel_data_id"`
 }
 
 // map[WeekNumber]Week
@@ -152,9 +153,11 @@ func InitDays() error {
 		}
 		x, err := res.RowsAffected()
 		if err != nil {
+			tx.Rollback()
 			return err
 		}
 		if x != 1 {
+			tx.Rollback()
 			return ErrDuelDataInsert
 		}
 		err = tx.Commit()
@@ -207,9 +210,11 @@ func (v *VsDuel) Create() error {
 	}
 	x, err := res.RowsAffected()
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 	if x != 1 {
+		tx.Rollback()
 		return fmt.Errorf("failed to create vsduel for %s: %w", v.Date, err)
 	}
 	err = tx.Commit()
@@ -255,22 +260,27 @@ func (v *VsDuel) StartWeek(week int, as []string) error {
 	}
 	x, err := res.RowsAffected()
 	if err != nil {
+		tx.Rollback()
 		return fmt.Errorf("failed to start week %d for %s: %w", k.WeekNumber, k.VsDuelId, err)
 	}
 	if x != 1 {
+		tx.Rollback()
 		return fmt.Errorf("failed to start week %d for %s: %w", k.WeekNumber, k.VsDuelId, db.ErrDbErrorUnknown)
 	}
 
 	for _, a := range k.AllianceIds {
 		res, err = tx.Exec("INSERT INTO vsduel_alliance (alliance_id, vsduel_week_id) VALUES (?, ?)", a, k.Id)
 		if err != nil {
+			tx.Rollback()
 			return err
 		}
 		x, err := res.RowsAffected()
 		if err != nil {
+			tx.Rollback()
 			return fmt.Errorf("failed to start week %d for %s: %w", k.WeekNumber, k.VsDuelId, err)
 		}
 		if x != 1 {
+			tx.Rollback()
 			return fmt.Errorf("failed to start week %d for %s: %w", k.WeekNumber, k.VsDuelId, db.ErrDbErrorUnknown)
 		}
 	}
@@ -380,13 +390,16 @@ func (k *Week) StartDay(dow string) error {
 		d.DayOfWeek,
 		d.WeekId)
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 	x, err := res.RowsAffected()
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 	if x != 1 {
+		tx.Rollback()
 		return fmt.Errorf("failed to insert duel data")
 	}
 	err = tx.Commit()
@@ -432,7 +445,7 @@ func (k *Week) AllianceTotal(aid string) (int, error) {
 		did := k.Data[dow].Id
 		aid := d.AllianceData[aid].AllianceId
 
-		err := db.Connection.QueryRowx("SELECT SUM(points) FROM vsduel_alliance WHERE vsduel_data_id=? AND alliance_id=?", did, aid).Scan(&p)
+		err := db.Connection.QueryRowx("SELECT SUM(points) FROM vsduel_alliance_data WHERE vsduel_data_id=? AND alliance_id=?", did, aid).Scan(&p)
 		if err != nil {
 			return 0, err
 		}
@@ -451,7 +464,7 @@ func (k *Week) CommanderTotal(cid string) (int, error) {
 		did := d.Id
 		cid := d.CommanderData[cid].CommanderId
 
-		err := db.Connection.QueryRowx("SELECT SUM(points) FROM vsduel_commander WHERE vsduel_data_id=? AND commander_id=?", did, cid).Scan(&p)
+		err := db.Connection.QueryRowx("SELECT SUM(points) FROM vsduel_commander_data WHERE vsduel_data_id=? AND commander_id=?", did, cid).Scan(&p)
 		if err != nil {
 			return 0, err
 		}
@@ -473,6 +486,31 @@ func GetData(did string) (*Data, error) {
 	return &d, nil
 }
 
+func (d *Data) GetCommanderData() error {
+	cdm := make(CommanderDataMap)
+
+	rows, err := db.Connection.Queryx("SELECT * FROM vsduel_commander_data WHERE vsduel_data_id=?", d.Id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("no commander data found for %s: %w", d.Id, err)
+		} else {
+			return fmt.Errorf("failed to get commander data for %s: %w", d.Id, err)
+		}
+	}
+	for rows.Next() {
+		var cd CommanderData
+		err = rows.StructScan(&cd)
+		if err != nil {
+			return err
+		}
+		cdm[cd.CommanderId] = cd
+	}
+
+	d.CommanderData = cdm
+
+	return nil
+}
+
 func (d *Data) UpsertAllianceData(ad AllianceDataMap) error {
 	tx, err := db.Connection.Begin()
 	if err != nil {
@@ -491,13 +529,16 @@ func (d *Data) UpsertAllianceData(ad AllianceDataMap) error {
 			a.AllianceId,
 			d.Id)
 		if err != nil {
+			tx.Rollback()
 			return err
 		}
 		x, err := res.RowsAffected()
 		if err != nil {
+			tx.Rollback()
 			return err
 		}
 		if x != 1 {
+			tx.Rollback()
 			return fmt.Errorf("failed to insert duel data")
 		}
 		vp += a.VsDuelPoints
@@ -522,21 +563,25 @@ func (d *Data) UpsertCommanderData(cd CommanderDataMap) error {
 		return err
 	}
 	for _, c := range cd {
-		res, err := tx.Exec("INSERT INTO vsduel_commander_data (points, rank, new, alliance_id, commander_id, vsduel_data_id) VALUES (?, ?, ?, ?, ?, ?)",
+		res, err := tx.Exec("INSERT INTO vsduel_commander_data (points, rank, new, name, alliance_id, commander_id, vsduel_data_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
 			c.Points,
 			c.Rank,
 			c.New,
+			c.Name,
 			c.AllianceId,
 			c.CommanderId,
 			d.Id)
 		if err != nil {
+			tx.Rollback()
 			return err
 		}
 		x, err := res.RowsAffected()
 		if err != nil {
+			tx.Rollback()
 			return err
 		}
 		if x != 1 {
+			tx.Rollback()
 			return fmt.Errorf("failed to insert duel data")
 		}
 	}
@@ -550,44 +595,68 @@ func (d *Data) UpsertCommanderData(cd CommanderDataMap) error {
 	return nil
 }
 
+func (cdm *CommanderDataMap) Exists(cid string) (bool, error) {
+	var n string
+	err := db.Connection.QueryRowx("SELECT name FROM vsduel_commander_data WHERE id=?", cid).Scan(&n)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		return false, fmt.Errorf("error checking if commander exists: %w", err)
+	}
+
+	return true, nil
+}
+
 // Takes a zipfile containing a single day of versus points ranking screen shots and adds the data to the duel.
-func (k *Week) ScanPointsRanking(z []byte, dow string) error {
+func (k *Week) ScanPointsRanking(z []byte, dow string) ([]string, error) {
+	var badimg []string
+
 	err := k.GetDays()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	d := k.Data[dow]
 
 	cd := make(CommanderDataMap)
-	ad := make(AllianceDataMap)
 
 	files, err := unzipSS(z)
 	if err != nil {
-		return fmt.Errorf("unable to unzip sreen shots: %w", err)
+		return nil, fmt.Errorf("unable to unzip sreen shots: %w", err)
 	}
 
 	for _, f := range files {
 		zf, err := f.Open()
 		if err != nil {
-			return err
+			return nil, err
 		}
 		defer zf.Close()
 
 		b, err := io.ReadAll(zf)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// TODO: Crop points should be config/args
-		ns, err := scanner.NewScanner(b, true, true, image.Point{447, 715}, image.Point{552, 1725})
+		var ns *scanner.Scanner
+		var ps *scanner.Scanner
+		//		if dow == "Saturday" {
+		//			ns, err = scanner.NewScanner(b, true, true, image.Point{435, 580}, image.Point{540, 1775})
+		//		} else {
+		ns, err = scanner.NewScanner(b, false, true, image.Point{447, 715}, image.Point{552, 1725})
+		//		}
 		if err != nil {
-			return fmt.Errorf("could not create names scanner: %w", err)
+			return nil, fmt.Errorf("could not create names scanner: %w", err)
 		}
 		// TODO: Crop points should be config/args
-		ps, err := scanner.NewScanner(b, false, true, image.Point{993, 715}, image.Point{312, 1725})
+		//		if dow == "Saturday" {
+		//			ps, err = scanner.NewScanner(b, true, true, image.Point{934, 580}, image.Point{358, 1775})
+		//		} else {
+		ps, err = scanner.NewScanner(b, false, true, image.Point{993, 715}, image.Point{312, 1725})
+		//		}
 		if err != nil {
-			return fmt.Errorf("could not create points scanner: %w", err)
+			return nil, fmt.Errorf("could not create points scanner: %w", err)
 		}
 
 		var names [7]string
@@ -597,10 +666,14 @@ func (k *Week) ScanPointsRanking(z []byte, dow string) error {
 		// Scan Names/Alliaces
 		t, err := ns.ScanImage()
 		if err != nil {
-			return fmt.Errorf("error scanning image: %w", err)
+			return nil, fmt.Errorf("error scanning image: %s: %w", f.Name, err)
 		}
 		c := 0
 		for _, n := range t {
+			if c >= 7 {
+				badimg = append(badimg, f.Name)
+				continue
+			}
 			if strings.HasPrefix(n, "[") {
 				alliances[c] = n
 				c++
@@ -612,25 +685,31 @@ func (k *Week) ScanPointsRanking(z []byte, dow string) error {
 		// Scan Points
 		t, err = ps.ScanImage()
 		if err != nil {
-			return fmt.Errorf("error scanning image: %w", err)
+			return nil, fmt.Errorf("error scanning image: %w", err)
 		}
 		for i, p := range t {
 			pt := strings.Replace(p, ",", "", -1)
 			points[i], err = strconv.Atoi(pt)
-			if err != nil {
-				return fmt.Errorf("could not convert %s to integer: %w", p, err)
-			}
+		}
+		if err != nil {
+			badimg = append(badimg, f.Name)
+			continue
 		}
 
+		if len(names) < 7 || len(alliances) < 7 || len(points) < 7 {
+			badimg = append(badimg, f.Name)
+			continue
+		}
 		for i := 0; i < 7; i++ {
 			var x CommanderData
 			err = x.processCommander(alliances[i], names[i], points[i])
 			if err != nil {
-				return fmt.Errorf("error processing commander %s: %w", names[i], err)
+				badimg = append(badimg, f.Name)
+				continue
 			}
-			if dow == "Saturday" {
-				k.fixSaturday(&x)
-			}
+			//			if dow == "Saturday" {
+			//				k.fixSaturday(&x)
+			//			}
 			cd[x.CommanderId] = x
 		}
 	}
@@ -639,36 +718,47 @@ func (k *Week) ScanPointsRanking(z []byte, dow string) error {
 	err = d.UpsertCommanderData(cd)
 	d.CommanderData = cd
 	if err != nil {
-		return err
-	}
-
-	for _, aid := range k.AllianceIds {
-		var x AllianceData
-		x.AllianceId = aid
-		x.VsDuelDataId = ad[aid].VsDuelDataId
-		x.processAlliance(d.CommanderData)
-		ad[aid] = x
-	}
-	vp := Days[dow].VsDuelPoints
-	if ad[k.AllianceIds[0]].Points >= ad[k.AllianceIds[1]].Points {
-		x := ad[k.AllianceIds[0]]
-		x.VsDuelPoints = vp
-		ad[k.AllianceIds[0]] = x
-	} else {
-		x := ad[k.AllianceIds[1]]
-		x.VsDuelPoints = vp
-		ad[k.AllianceIds[1]] = x
-	}
-
-	if ad[k.AllianceIds[0]].VsDuelPoints == 0 && ad[k.AllianceIds[1]].VsDuelPoints == 0 {
-		return fmt.Errorf("scanPointsRanking: vspoints are zero: %v: should be: %d", ad, vp)
-	}
-	err = d.UpsertAllianceData(ad)
-	if err != nil {
-		return err
+		return nil, err
 	}
 
 	k.Data[dow] = d
+
+	return badimg, nil
+}
+
+func (d *Data) CalculateAllianceData() error {
+	adm := make(AllianceDataMap)
+	dow := d.DayOfWeek
+	k, err := GetWeek(d.WeekId)
+	if err != nil {
+		return fmt.Errorf("failed to get week %s: %w", d.WeekId, err)
+	}
+
+	for _, aid := range k.AllianceIds {
+		var ad AllianceData
+		ad.AllianceId = aid
+		ad.VsDuelDataId = adm[aid].VsDuelDataId
+		ad.processAlliance(d.CommanderData)
+		adm[aid] = ad
+	}
+	vp := Days[dow].VsDuelPoints
+	if adm[k.AllianceIds[0]].Points >= adm[k.AllianceIds[1]].Points {
+		x := adm[k.AllianceIds[0]]
+		x.VsDuelPoints = vp
+		adm[k.AllianceIds[0]] = x
+	} else {
+		x := adm[k.AllianceIds[1]]
+		x.VsDuelPoints = vp
+		adm[k.AllianceIds[1]] = x
+	}
+
+	if adm[k.AllianceIds[0]].VsDuelPoints == 0 && adm[k.AllianceIds[1]].VsDuelPoints == 0 {
+		return fmt.Errorf("scanPointsRanking: vspoints are zero: %v: should be: %d", adm, vp)
+	}
+	err = d.UpsertAllianceData(adm)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -693,7 +783,10 @@ func (cd *CommanderData) processCommander(a, c string, p int) error {
 	if err != nil {
 		return err
 	}
-	aa.GetByTag(t[0])
+	err = aa.GetByTag(t[0])
+	if err != nil {
+		return err
+	}
 	cd.AllianceId = aa.Id
 
 	err = cc.GetByName(c)
@@ -720,6 +813,7 @@ func (cd *CommanderData) processCommander(a, c string, p int) error {
 		}
 	}
 	cd.CommanderId = cc.Id
+	cd.Name = c
 
 	return nil
 }
@@ -733,18 +827,26 @@ func unzipSS(z []byte) ([]*zip.File, error) {
 	return a.File, nil
 }
 
+/*
 func (k *Week) fixSaturday(cd *CommanderData) error {
 	var mft int
 
-	err := db.Connection.QueryRowx("SELECT SUM(points) FROM vsduel_commander WHERE vsduel_data_id=? AND commander_id=?", cd.VsDuelDataId, cd.CommanderId).Scan(&mft)
-	if err != nil {
-		return err
+	dows := [6]string{"Monday", "Tuesday", "Wednesday", "Thursday", "Friday"}
+
+	for _, dow := range dows {
+		var dp int
+		err := db.Connection.QueryRowx("SELECT points FROM vsduel_commander_data WHERE vsduel_data_id=? AND commander_id=?", k.Data[dow].Id, cd.CommanderId).Scan(&dp)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+		mft += dp
 	}
 
 	cd.Points = cd.Points - mft
 
 	return nil
 }
+*/
 
 func (cd CommanderDataMap) setRank() {
 	type kv struct {
@@ -766,4 +868,81 @@ func (cd CommanderDataMap) setRank() {
 		c.Rank = i + 1
 		cd[kv.Key] = c
 	}
+}
+
+func (cd CommanderDataMap) UpdateRanks() error {
+	cd.setRank()
+
+	tx, err := db.Connection.Begin()
+	if err != nil {
+		return err
+	}
+	for _, c := range cd {
+		res, err := tx.Exec("UPDATE vsduel_commander_data SET rank=? WHERE commander_id=? AND vsduel_data_id=?",
+			c.Rank,
+			c.CommanderId,
+			c.VsDuelDataId)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+		x, err := res.RowsAffected()
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to update rank for %s: %w", c.CommanderId, err)
+		}
+		if x != 1 {
+			tx.Rollback()
+			return fmt.Errorf("failed to update rank for %s to %d", c.CommanderId, c.Rank)
+		}
+	}
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("failed to update ranks: %w", err)
+	}
+
+	return nil
+}
+
+func (k *Week) MergeCommanderData(src, dst string) error {
+	for _, d := range k.Data {
+		var sd CommanderData
+		var dc commander.Commander
+		dc.Id = dst
+		err := dc.Get()
+		if err != nil {
+			return fmt.Errorf("merge commanders: failed to get commander %s: %w", dst, err)
+		}
+
+		err = d.GetCommanderData()
+		if err != nil {
+			return fmt.Errorf("merge commanders: failed to get commander data: %w", err)
+		}
+
+		sd = d.CommanderData[src]
+		tx, err := db.Connection.Begin()
+		if err != nil {
+			return err
+		}
+		res, err := tx.Exec("UPDATE vsduel_commander_data SET commander_id=? WHERE commmander_id=? amd vsduel_data_id=?", dst, sd.CommanderId, sd.VsDuelDataId)
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to execute merge vsduel commander data for %s: %w", sd.CommanderId, err)
+		}
+		_, err = res.RowsAffected()
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to merge vsduel commander data for %s: %w", sd.CommanderId, err)
+		}
+		err = tx.Commit()
+		if err != nil {
+			return fmt.Errorf("failed to update vsuel commander data for %s: %w", sd.CommanderId, err)
+		}
+
+		sd.CommanderId = dst
+		d.CommanderData[dst] = sd
+		delete(d.CommanderData, src)
+	}
+
+	return commander.Merge(src, dst)
 }
