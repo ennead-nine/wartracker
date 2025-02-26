@@ -1,0 +1,36 @@
+rank:
+    rect:
+        px: 84
+        py: 555
+        rx: 100
+        ry: 100
+    charfilter:
+        filter: "0123456789"
+    preprocess:
+        gray: true
+        invert: true
+        bg: false
+name:
+    rect:
+        px: 330
+        py: 549
+        rx: 396
+        ry: 63
+    charfilter:
+        filter: "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    preprocess:
+        gray: true
+        invert: false
+        bg: true
+points:
+    rect:
+        px: 726
+        py: 573
+        rx: 231
+        ry: 66
+    charfilter:
+        filter: "0123456789"
+    preprocess:
+        gray: true
+        invert: false
+        bg: true

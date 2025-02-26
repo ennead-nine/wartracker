@@ -1,0 +1,84 @@
+pfp:
+    rect:
+        px: 88
+        py: 526
+        rx: 450
+        ry: 450
+    charfilter:
+        filter: ""
+    preprocess:
+        gray: false
+        invert: false
+        bg: false
+hqlevel:
+    rect:
+        px: 177
+        py: 1122
+        rx: 131
+        ry: 70
+    charfilter:
+        filter: "0123456789"
+    preprocess:
+        gray: true
+        invert: true
+        bg: true
+nametag:
+    rect:
+        px: 300
+        py: 1114
+        rx: 538
+        ry: 86
+    charfilter:
+        filter: "[]0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ "
+    preprocess:
+        gray: true
+        invert: true
+        bg: true
+hqpower:
+    rect:
+        px: 177
+        py: 1237
+        rx: 178
+        ry: 78
+    charfilter:
+        filter: "0123456789.KMG"
+    preprocess:
+        gray: false
+        invert: false
+        bg: false
+kills:
+    rect:
+        px: 498
+        py: 1237
+        rx: 173
+        ry: 71
+    charfilter:
+        filter: "0123456789.KMG"
+    preprocess:
+        gray: false
+        invert: false
+        bg: false
+proflevel:
+    rect:
+        px: 798
+        py: 1234
+        rx: 173
+        ry: 71
+    charfilter:
+        filter: "0123456789"
+    preprocess:
+        gray: false
+        invert: false
+        bg: false
+likes:
+    rect:
+        px: 149
+        py: 994
+        rx: 141
+        ry: 60
+    charfilter:
+        filter: "0123456789"
+    preprocess:
+        gray: false
+        invert: false
+        bg: false
