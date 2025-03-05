@@ -2,7 +2,9 @@ include .env
 
 GIT = /usr/bin/git
 BUILD = $(/usr/bin/git describe)
-LDFLAGS=-ldflags "-X build.Build=$(BUILD)"
+LDFLAGS = -ldflags "-X build.Build=$(BUILD)"
+
+
 
 .PHONY: db-schema-commit
 

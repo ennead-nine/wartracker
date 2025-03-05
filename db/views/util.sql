@@ -10,15 +10,12 @@ INNER JOIN commander AS c
 	ON vcd.commander_id=c.id
 INNER JOIN vsduel_data AS vd
 	ON vcd.vsduel_data_id=vd.id
-JOIN vsduel_day AS vdy
-	ON vd.day_of_week=vdy.day_of_week
 INNER JOIN vsduel_week AS vw
 	ON vd.vsduel_week_id=vw.id
 INNER JOIN commander_alias AS ca
 	ON vcd.commander_id=ca.commander_id
-WHERE vw.vsweek_number=3 AND
-	ca.preferred=1
-ORDER BY vdy.day_number, vcd.points DESC
+WHERE vw.vsweek_number=3
+ORDER BY vd.day_of_week, vcd.points DESC
 
 --Alliance Data
 SELECT vad.points, vad.vsduel_points, a.tag, vd.day_of_week 

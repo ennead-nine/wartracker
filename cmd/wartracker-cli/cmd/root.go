@@ -38,6 +38,7 @@ var (
 	//Configuration variables
 	ConfigFile string
 	DBFile     string
+	Input      string
 )
 
 // RootCmd represents the base command when called without any subcommands
@@ -70,6 +71,7 @@ func init() {
 	// Configuration Flags
 	rootCmd.PersistentFlags().StringVar(&ConfigFile, "config", "", "config file (default is $HOME/.wartracker-cli.yaml)")
 	rootCmd.PersistentFlags().StringVar(&DBFile, "dbfile", "", "database file")
+	rootCmd.PersistentFlags().StringVarP(&Input, "input", "i", "", "input file")
 
 	cobra.CheckErr(viper.BindPFlag("dbfile", rootCmd.PersistentFlags().Lookup("dbfile")))
 

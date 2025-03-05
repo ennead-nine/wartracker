@@ -40,12 +40,15 @@ type Day struct {
 	ShortName    string `json:"short-name" yaml:"shortName" db:"short_name"`
 	DayOfWeek    string `json:"day-of-week" yaml:"dayOfWeek" db:"day_of_week"`
 	VsDuelPoints int    `json:"vsduel-points" yaml:"vsDuelPoints" db:"vsduel_points"`
+	DayNumber    int    `json:"day-number" yaml:"dayNumber" db:"day_number"`
 }
 
 type Data struct {
 	Id            string           `json:"id" yaml:"id" db:"id"`
 	WeekId        string           `json:"vsduel-week-id" yaml:"vsDuelWeekId" db:"vsduel_week_id"`
 	DayOfWeek     string           `json:"day-of-week" yaml:"dayOfWeek" db:"day_of_week"`
+	Push          bool             `json:"push" yaml:"push" db:"push"`
+	Save          bool             `json:"save" yaml:"save" db:"save"`
 	AllianceData  AllianceDataMap  `json:"vsduel-alliance-data" yaml:"vsDuelAllianceData"`
 	CommanderData CommanderDataMap `json:"vsduel-commander-data" yaml:"vsDuelCommanderData"`
 }
@@ -62,6 +65,7 @@ type CommanderData struct {
 	Rank         int    `json:"rank" yaml:"rank" db:"rank"`
 	New          bool   `json:"new" yaml:"new" db:"new"`
 	Name         string `json:"name" yaml:"name" db:"name"`
+	Vacation     bool   `json:"vacation" yaml:"vacation" db:"vacation"`
 	AllianceId   string `json:"alliance-id" yaml:"allianceid" db:"alliance_id"`
 	CommanderId  string `json:"commander-id" yaml:"commanderId" db:"commander_id"`
 	VsDuelDataId string `json:"vsduel-data-id" yaml:"vsDuelDataId" db:"vsduel_data_id"`
@@ -98,36 +102,42 @@ func InitDays() error {
 			ShortName:    "Radar",
 			DayOfWeek:    "Monday",
 			VsDuelPoints: 1,
+			DayNumber:    0,
 		},
 		"Tuesday": {
 			Name:         "Base Expansion",
-			ShortName:    "Construction",
+			ShortName:    "Build",
 			DayOfWeek:    "Tuesday",
 			VsDuelPoints: 2,
+			DayNumber:    1,
 		},
 		"Wednesday": {
 			Name:         "Age of Science",
 			ShortName:    "Tech",
 			DayOfWeek:    "Wednesday",
 			VsDuelPoints: 2,
+			DayNumber:    2,
 		},
 		"Thursday": {
 			Name:         "Train Heros",
 			ShortName:    "Hero",
 			DayOfWeek:    "Thursday",
 			VsDuelPoints: 2,
+			DayNumber:    3,
 		},
 		"Friday": {
 			Name:         "Total Mobilization",
 			ShortName:    "Units",
 			DayOfWeek:    "Friday",
 			VsDuelPoints: 2,
+			DayNumber:    4,
 		},
 		"Saturday": {
 			Name:         "Enemy Buster",
 			ShortName:    "Kill",
 			DayOfWeek:    "Saturday",
 			VsDuelPoints: 4,
+			DayNumber:    5,
 		},
 		// Totals
 		"Sunday": {
@@ -135,6 +145,7 @@ func InitDays() error {
 			ShortName:    "Totals",
 			DayOfWeek:    "Sunday",
 			VsDuelPoints: 0,
+			DayNumber:    6,
 		},
 	}
 
@@ -143,11 +154,12 @@ func InitDays() error {
 		if err != nil {
 			return err
 		}
-		res, err := tx.Exec("INSERT INTO vsduel_day (name, short_name, day_of_week, vsduel_points) VALUES (?, ?, ?, ?)",
+		res, err := tx.Exec("INSERT INTO vsduel_day (name, short_name, day_of_week, vsduel_points, day_number) VALUES (?, ?, ?, ?, ?)",
 			d.Name,
 			d.ShortName,
 			d.DayOfWeek,
-			d.VsDuelPoints)
+			d.VsDuelPoints,
+			d.DayNumber)
 		if err != nil {
 			return err
 		}
@@ -641,20 +653,20 @@ func (k *Week) ScanPointsRanking(z []byte, dow string) ([]string, error) {
 		// TODO: Crop points should be config/args
 		var ns *scanner.Scanner
 		var ps *scanner.Scanner
-		//		if dow == "Saturday" {
-		//			ns, err = scanner.NewScanner(b, true, true, image.Point{435, 580}, image.Point{540, 1775})
-		//		} else {
-		ns, err = scanner.NewScanner(b, false, true, image.Point{447, 715}, image.Point{552, 1725})
-		//		}
+		if dow == "Saturday" {
+			ns, err = scanner.NewScanner(b, true, true, image.Point{435, 580}, image.Point{540, 1775})
+		} else {
+			ns, err = scanner.NewScanner(b, false, true, image.Point{447, 715}, image.Point{552, 1725})
+		}
 		if err != nil {
 			return nil, fmt.Errorf("could not create names scanner: %w", err)
 		}
 		// TODO: Crop points should be config/args
-		//		if dow == "Saturday" {
-		//			ps, err = scanner.NewScanner(b, true, true, image.Point{934, 580}, image.Point{358, 1775})
-		//		} else {
-		ps, err = scanner.NewScanner(b, false, true, image.Point{993, 715}, image.Point{312, 1725})
-		//		}
+		if dow == "Saturday" {
+			ps, err = scanner.NewScanner(b, true, true, image.Point{934, 580}, image.Point{358, 1775})
+		} else {
+			ps, err = scanner.NewScanner(b, false, true, image.Point{993, 715}, image.Point{312, 1725})
+		}
 		if err != nil {
 			return nil, fmt.Errorf("could not create points scanner: %w", err)
 		}
@@ -707,9 +719,9 @@ func (k *Week) ScanPointsRanking(z []byte, dow string) ([]string, error) {
 				badimg = append(badimg, f.Name)
 				continue
 			}
-			//			if dow == "Saturday" {
-			//				k.fixSaturday(&x)
-			//			}
+			if dow == "Saturday" {
+				k.fixSaturday(&x)
+			}
 			cd[x.CommanderId] = x
 		}
 	}
@@ -827,7 +839,6 @@ func unzipSS(z []byte) ([]*zip.File, error) {
 	return a.File, nil
 }
 
-/*
 func (k *Week) fixSaturday(cd *CommanderData) error {
 	var mft int
 
@@ -846,7 +857,6 @@ func (k *Week) fixSaturday(cd *CommanderData) error {
 
 	return nil
 }
-*/
 
 func (cd CommanderDataMap) setRank() {
 	type kv struct {

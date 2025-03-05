@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"wartracker/pkg/alliance"
 	"wartracker/pkg/db"
 	"wartracker/pkg/warzone"
 	"wartracker/pkg/wtid"
@@ -80,10 +81,10 @@ func (c *Commander) Create() error {
 		return err
 	}
 
-	return c.AddAlias(c.Name, true)
+	return c.AddAlias(c.Name, "NA", true)
 }
 
-func (c *Commander) AddAlias(n string, p bool) error {
+func (c *Commander) AddAlias(n, t string, p bool) error {
 	if p {
 		tx, err := db.Connection.Begin()
 		if err != nil {
@@ -109,7 +110,7 @@ func (c *Commander) AddAlias(n string, p bool) error {
 		preferred,
 		commander_id 
 		) VALUES (?, ?, ?, ?)`,
-		n, "NA", p, c.Id)
+		n, t, p, c.Id)
 	if err != nil {
 		tx.Rollback()
 		return fmt.Errorf("failed to add alias for %s: %w", c.Id, err)
@@ -151,6 +152,23 @@ func (c *Commander) GetAliases() ([]Alias, error) {
 	return as, nil
 }
 
+func (c *Commander) UpdateAliases(t string) error {
+	tx, err := db.Connection.Begin()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec("UPDATE commander_alias SET tag=? WHERE commander_id=? WHERE tag=?",
+		t,
+		c.Id,
+		"NA")
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
 func (c *Commander) AddData(date string, d Data) error {
 	c.Data = make(DataMap)
 	c.Data[date] = d
@@ -176,15 +194,25 @@ func (c *Commander) AddData(date string, d Data) error {
 	}
 	x, err := res.RowsAffected()
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 	if x != 1 {
+		tx.Rollback()
 		return fmt.Errorf("failed to insert commander data")
 	}
 	err = tx.Commit()
 	if err != nil {
 		return err
 	}
+
+	var a alliance.Alliance
+	a.Id = d.AllianceId
+	err = a.Get()
+	if err != nil {
+		return err
+	}
+	c.UpdateAliases(a.Tag)
 
 	return nil
 }
@@ -283,7 +311,22 @@ func (c *Commander) Update() error {
 		return err
 	}
 
-	return c.AddAlias(c.Name, true)
+	err = c.GetLatestData()
+	if err == nil {
+		for _, data := range c.Data {
+			var a alliance.Alliance
+			a.Id = data.AllianceId
+			err = a.Get()
+			if err != nil {
+				return err
+			}
+			err = c.AddAlias(c.Name, a.Tag, true)
+		}
+	} else {
+		err = c.AddAlias(c.Name, "NA", true)
+	}
+
+	return err
 }
 
 func (c *Commander) GetByName(n string) error {
@@ -327,7 +370,7 @@ func Merge(src, dst string) error {
 		return err
 	}
 	for _, sa := range sas {
-		err = p.AddAlias(sa.Alias, false)
+		err = p.AddAlias(sa.Alias, sa.Tag, false)
 		if err != nil {
 			return err
 		}

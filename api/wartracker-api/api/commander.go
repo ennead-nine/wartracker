@@ -155,24 +155,49 @@ func (h CommanderHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h CommanderHandler) AddData(w http.ResponseWriter, r *http.Request) {
 	indent := GetQueryBool(r, "indent")
 
-	var c commander.Commander
-	c.Id = chi.URLParam(r, "id")
-
-	date := chi.URLParam(r, "date")
-
-	err := c.Get()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
 	var d commander.Data
-	err = json.NewDecoder(r.Body).Decode(&d)
+	err := json.NewDecoder(r.Body).Decode(&d)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	err = c.AddData(date, d)
+	var c commander.Commander
+	c.Id = d.CommanderId
+	err = c.Get()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	err = c.AddData(d.Date, d)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = jsonOutput(w, c, indent)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (h CommanderHandler) AddAlias(w http.ResponseWriter, r *http.Request) {
+	indent := GetQueryBool(r, "indent")
+
+	var a commander.Alias
+	err := json.NewDecoder(r.Body).Decode(&a)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	var c commander.Commander
+	c.Id = a.CommanderId
+	err = c.Get()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	err = c.AddAlias(a.Alias, a.Tag, a.Preferred)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -192,11 +217,12 @@ func CommanderRoutes() chi.Router {
 	r.Get("/", h.List)
 	r.Get("/a/{allianceid}", h.ListMembers)
 	r.Get("/n/{name}", h.GetByName)
-	r.Post("/{server}", h.Create)
+	r.Post("/", h.Create)
 	r.Get("/{id}", h.Get)
-	r.Put("/{id}", h.Update)
-	r.Put("/{id}/data/{date}", h.AddData)
+	r.Put("/", h.Update)
+	r.Put("/d", h.AddData)
 	r.Put("/{id}/m/{id2}", h.Merge)
+	r.Put("/a", h.AddAlias)
 
 	return r
 }
