@@ -11,11 +11,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func AddData() error {
+func CommanderAddData() error {
 	return fmt.Errorf("not implemented")
 }
 
-func AddAlias() error {
+func CommanderAddAlias() error {
 	data, err := os.Open(Input)
 	if err != nil {
 		log.Fatal(err)
@@ -47,13 +47,13 @@ func AddAlias() error {
 	return nil
 }
 
-func GetData() error {
+func CommanderGetData() error {
 	return fmt.Errorf("not implemented")
 }
-func GetAlias() error {
+func CommanderGetAlias() error {
 	return fmt.Errorf("not implemented")
 }
-func Add() error {
+func CommanderCreate() error {
 	return fmt.Errorf("not implemented")
 }
 
@@ -72,15 +72,15 @@ to quickly create a Cobra application.`,
 
 		switch args[0] {
 		case "add-data":
-			err = AddData()
+			err = CommanderAddData()
 		case "add-alias":
-			err = AddAlias()
+			err = CommanderAddAlias()
 		case "get-data":
-			err = GetData()
+			err = CommanderGetData()
 		case "get-alias":
-			err = GetAlias()
+			err = CommanderGetAlias()
 		case "add":
-			err = Add()
+			err = CommanderCreate()
 		}
 
 		if err != nil {
@@ -91,4 +91,5 @@ to quickly create a Cobra application.`,
 
 func init() {
 	rootCmd.AddCommand(commanderCmd)
+	commanderCmd.Flags().StringVarP(&Input, "input", "i", "", "input file")
 }

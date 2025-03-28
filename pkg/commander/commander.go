@@ -57,7 +57,7 @@ func (c *Commander) Create() error {
 
 	tx, err := db.Connection.Begin()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create commander %s: %w", c.Name, err)
 	}
 	res, err := tx.Exec("INSERT INTO commander (id, name, warzone_id) VALUES (?, ?, ?)",
 		c.Id,
@@ -65,7 +65,7 @@ func (c *Commander) Create() error {
 		c.WarzoneId)
 	if err != nil {
 		tx.Rollback()
-		return err
+		return fmt.Errorf("failed to insert commander: %w", err)
 	}
 	x, err := res.RowsAffected()
 	if err != nil {
@@ -78,7 +78,7 @@ func (c *Commander) Create() error {
 	}
 	err = tx.Commit()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to insert commander: %w", err)
 	}
 
 	return c.AddAlias(c.Name, "NA", true)
@@ -88,21 +88,37 @@ func (c *Commander) AddAlias(n, t string, p bool) error {
 	if p {
 		tx, err := db.Connection.Begin()
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to add alias %s to %s: %w", n, c.Name, err)
 		}
-		_, err = tx.Exec("UPDATE commander_alias SET preferred = false WHERE commander_id = ?", c.Id)
+		_, err = tx.Exec("UPDATE commander_alias SET preferred=false WHERE commander_id=?", c.Id)
 		if err != nil {
 			tx.Rollback()
 			return fmt.Errorf("failed to update preferred alias for %s: %w", c.Id, err)
 		}
 		err = tx.Commit()
 		if err != nil {
-			return err
+			tx.Rollback()
+			return fmt.Errorf("failed to update preferred alias for %s: %w", c.Id, err)
+		}
+
+		tx, err = db.Connection.Begin()
+		if err != nil {
+			return fmt.Errorf("failed to add alias %s to %s: %w", n, c.Name, err)
+		}
+		_, err = tx.Exec("UPDATE commander SET name=? WHERE id=?", n, c.Id)
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to set commander name to preferred alias %s: %w", n, err)
+		}
+		err = tx.Commit()
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to set commander name %s: %w", n, err)
 		}
 	}
 	tx, err := db.Connection.Begin()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to add alias %s to %s: %w", n, c.Name, err)
 	}
 	res, err := tx.Exec(`INSERT INTO commander_alias (
 		alias,
@@ -121,11 +137,14 @@ func (c *Commander) AddAlias(n, t string, p bool) error {
 		return fmt.Errorf("failed to add alias for %s: %w", c.Id, err)
 	}
 	if x != 1 {
+		tx.Rollback()
 		return fmt.Errorf("failed to insert alias: unknown error")
 	}
+
 	err = tx.Commit()
 	if err != nil {
-		return err
+		tx.Rollback()
+		return fmt.Errorf("failed to insert alias: unknown error: %w", err)
 	}
 
 	return nil
@@ -158,15 +177,22 @@ func (c *Commander) UpdateAliases(t string) error {
 		return err
 	}
 
-	_, err = tx.Exec("UPDATE commander_alias SET tag=? WHERE commander_id=? WHERE tag=?",
+	_, err = tx.Exec("UPDATE commander_alias SET tag=? WHERE commander_id=? AND tag=?",
 		t,
 		c.Id,
 		"NA")
 	if err != nil {
 		tx.Rollback()
-		return err
+		return fmt.Errorf("failed to update alias tag for %s to %s: %w", c.Name, t, err)
 	}
-	return tx.Commit()
+
+	err = tx.Commit()
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to update alias tag for %s to %s: %w", c.Name, t, err)
+	}
+
+	return nil
 }
 
 func (c *Commander) AddData(date string, d Data) error {
@@ -190,12 +216,13 @@ func (c *Commander) AddData(date string, d Data) error {
 		c.Data[date].AllianceId,
 		c.Id)
 	if err != nil {
-		return err
+		tx.Rollback()
+		return fmt.Errorf("failed to insert commander data: %w", err)
 	}
 	x, err := res.RowsAffected()
 	if err != nil {
 		tx.Rollback()
-		return err
+		return fmt.Errorf("failed to insert commander data: %w", err)
 	}
 	if x != 1 {
 		tx.Rollback()
@@ -203,7 +230,8 @@ func (c *Commander) AddData(date string, d Data) error {
 	}
 	err = tx.Commit()
 	if err != nil {
-		return err
+		tx.Rollback()
+		return fmt.Errorf("failed to insert commander data: %w", err)
 	}
 
 	var a alliance.Alliance
@@ -212,9 +240,8 @@ func (c *Commander) AddData(date string, d Data) error {
 	if err != nil {
 		return err
 	}
-	c.UpdateAliases(a.Tag)
 
-	return nil
+	return c.UpdateAliases(a.Tag)
 }
 
 func (c *Commander) GetData() error {
@@ -228,6 +255,7 @@ func (c *Commander) GetData() error {
 		var d Data
 		err = rows.StructScan(&d)
 		if err != nil {
+			rows.Close()
 			return err
 		}
 		c.Data[d.Date] = d
@@ -246,6 +274,7 @@ func (c *Commander) GetLatestData() error {
 		var d Data
 		err = rows.StructScan(&d)
 		if err != nil {
+			rows.Close()
 			return err
 		}
 		c.Data[d.Date] = d
@@ -264,6 +293,7 @@ func (c *Commander) GetDataByDate(date string) error {
 		var d Data
 		err = rows.StructScan(&d)
 		if err != nil {
+			rows.Close()
 			return err
 		}
 		c.Data[d.Date] = d
@@ -291,7 +321,7 @@ func (c *Commander) Update() error {
 
 	tx, err := db.Connection.Begin()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to update commander: %w", err)
 	}
 	res, err := tx.Exec("UPDATE commander SET name=?, warzone_id=? WHERE id=?",
 		c.Name,
@@ -308,6 +338,7 @@ func (c *Commander) Update() error {
 	}
 	err = tx.Commit()
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 
@@ -326,7 +357,11 @@ func (c *Commander) Update() error {
 		err = c.AddAlias(c.Name, "NA", true)
 	}
 
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to update commander %s: %w", c.Name, err)
+	}
+
+	return nil
 }
 
 func (c *Commander) GetByName(n string) error {
@@ -409,6 +444,7 @@ func (c *Commander) DeleteData(date string) error {
 	}
 	err = tx.Commit()
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 
@@ -435,6 +471,7 @@ func (c *Commander) DeleteAlias(alias string) error {
 	}
 	err = tx.Commit()
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 
@@ -481,6 +518,7 @@ func (c *Commander) Delete() error {
 	}
 	err = tx.Commit()
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 
@@ -499,6 +537,7 @@ func List() (CommanderMap, error) {
 		var c Commander
 		err = rows.StructScan(&c)
 		if err != nil {
+			rows.Close()
 			return nil, err
 		}
 		cs[c.Id] = c
@@ -521,12 +560,14 @@ func ListByAlliance(a string) (CommanderMap, error) {
 
 		err = rows.Scan(&i)
 		if err != nil {
+			rows.Close()
 			return nil, err
 		}
 
 		c.Id = i
 		err = c.Get()
 		if err != nil {
+			rows.Close()
 			return nil, fmt.Errorf("error getting commander %s: %w", i, err)
 		}
 		cs[c.Id] = c

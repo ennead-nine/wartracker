@@ -3,6 +3,7 @@
 _data
 _bin
 _scratch
+_log
 dist/*
 dist/ui
 .wartracker*

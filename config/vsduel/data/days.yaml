@@ -1,18 +1,30 @@
 - name: "Radar Training"
   shortName: "Radar"
   dayOfWeek: "Monday"
+  vsDuelPoints: 1
+  dayNumber: 0
 - name: "Base Expansion"
   shortName: "Construction"
   dayOfWeek: "Tuesday"
+  vsDuelPoints: 2
+  dayNumber: 1
 - name: "Age of Science"
   shortName: "Tech"
   dayOfWeek: "Wednesday"
+  vsDuelPoints: 2
+  dayNumber: 2
 - name: "Train Heros"
   shortName: "Hero"
   dayOfWeek: "Thursday"
+  vsDuelPoints: 2
+  dayNumber: 3
 - name: "Total Mobilization"
   shortName: "Units"
   dayOfWeek: "Friday"
+  vsDuelPoints: 2
+  dayNumber: 4
 - name: "Enemy Buster"
   shortName: "Kill"
   dayOfWeek: "Saturday"
+  vsDuelPoints: 4
+  dayNumber: 5

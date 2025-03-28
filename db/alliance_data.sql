@@ -12,6 +12,6 @@ JOIN vsduel_data AS vd
 JOIN vsduel_week AS vw
 	ON vd.vsduel_week_id=vw.id
 WHERE
-	vw.vsweek_number=3
+	vw.vsweek_number=4
 	
 	

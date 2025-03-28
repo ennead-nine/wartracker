@@ -83,4 +83,5 @@ func initServer() {
 	root.Mount("/alliance", AllianceRoutes())
 	root.Mount("/commander", CommanderRoutes())
 	root.Mount("/vsduel", VsDuelRoutes())
+	root.Mount("/donation", DonationRoutes())
 }

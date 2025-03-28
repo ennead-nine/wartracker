@@ -202,6 +202,7 @@ CREATE TABLE IF NOT EXISTS "donation"(
     CHECK (
       "date" IS date("date")
     ),
+  "name"          TEXT NOT NULL,
   "commander_id"  TEXT NOT NULL,
   PRIMARY KEY("id"),
   FOREIGN KEY("commander_id") REFERENCES "commander"("id")

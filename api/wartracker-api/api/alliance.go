@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"wartracker/pkg/alliance"
@@ -160,6 +161,10 @@ func (h AllianceHandler) AddData(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h AllianceHandler) GetByTag(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, fmt.Errorf("GetByTag is not yet implemented").Error(), http.StatusNotImplemented)
+}
+
 func AllianceRoutes() chi.Router {
 	r := chi.NewRouter()
 
@@ -167,6 +172,7 @@ func AllianceRoutes() chi.Router {
 	r.Get("/", h.List)
 	r.Post("/", h.Create)
 	r.Get("/{id}", h.Get)
+	r.Get("/t/{tag}", h.GetByTag)
 	r.Put("/{id}", h.Update)
 	r.Put("/{id}/data", h.AddData)
 

@@ -95,6 +95,7 @@ func (a *Alliance) Create() error {
 	}
 	err = tx.Commit()
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 

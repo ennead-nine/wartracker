@@ -116,6 +116,13 @@ func (h VsDuelHandler) ScanVsDay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if vd.Weeks == nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, fmt.Errorf("no weeks found for duel %s: %w", vd.Id, err).Error(), http.StatusNotFound)
+			return
+		}
+	}
+
 	week, err := strconv.Atoi(chi.URLParam(r, "week"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

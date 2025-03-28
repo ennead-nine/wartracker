@@ -48,7 +48,7 @@ INNER JOIN vsduel_week AS vw
 	ON vd.vsduel_week_id=vw.id
 INNER JOIN alliance AS a
 	ON vcd.alliance_id=a.id
-WHERE vw.vsweek_number=3
+WHERE vw.vsweek_number=4
 AND a.tag="P4K"
 AND ca.preferred=1
 AND vd.day_of_week="Saturday"

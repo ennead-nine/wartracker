@@ -35,7 +35,7 @@ GROUP BY (vcd.commander_id)
 ORDER BY ca.alias
 
 --Absent Days
-SELECT ca.alias, (COUNT(coalesce(vcd.points, 0)) - (SELECT COUNT(*) FROM vsduel_data)) * -1 AS absent
+SELECT ca.alias, ((COUNT(coalesce(vcd.points, 0)) - (SELECT COUNT(*) FROM vsduel_data)) * -1) - 3 AS absent
 FROM commander_alias AS ca
 INNER JOIN commander_data AS cd
 	ON ca.commander_id=cd.commander_id

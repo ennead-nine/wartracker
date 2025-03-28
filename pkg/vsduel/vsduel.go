@@ -1,11 +1,8 @@
 package vsduel
 
 import (
-	"archive/zip"
-	"bytes"
 	"database/sql"
 	"fmt"
-	"image"
 	"io"
 	"sort"
 	"strconv"
@@ -14,7 +11,9 @@ import (
 
 	"wartracker/pkg/alliance"
 	"wartracker/pkg/commander"
+	"wartracker/pkg/common"
 	"wartracker/pkg/db"
+	"wartracker/pkg/logger"
 	"wartracker/pkg/scanner"
 	"wartracker/pkg/wtid"
 )
@@ -94,6 +93,18 @@ var (
 )
 
 var Days DayMap
+var CropNames = common.CropRatios{
+	Rpx: .32,
+	Rpy: .25,
+	Rsx: .42,
+	Rsy: .56,
+}
+var CropPoints = common.CropRatios{
+	Rpx: .74,
+	Rpy: .25,
+	Rsx: .42,
+	Rsy: .56,
+}
 
 func InitDays() error {
 	ds := DayMap{
@@ -152,7 +163,7 @@ func InitDays() error {
 	for _, d := range ds {
 		tx, err := db.Connection.Begin()
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to initialize vsduel days: %w", err)
 		}
 		res, err := tx.Exec("INSERT INTO vsduel_day (name, short_name, day_of_week, vsduel_points, day_number) VALUES (?, ?, ?, ?, ?)",
 			d.Name,
@@ -161,20 +172,22 @@ func InitDays() error {
 			d.VsDuelPoints,
 			d.DayNumber)
 		if err != nil {
-			return err
+			tx.Rollback()
+			return fmt.Errorf("failed to initialize vsduel days: %w", err)
 		}
 		x, err := res.RowsAffected()
 		if err != nil {
 			tx.Rollback()
-			return err
+			return fmt.Errorf("failed to initialize vsduel days: %w", err)
 		}
 		if x != 1 {
 			tx.Rollback()
-			return ErrDuelDataInsert
+			return fmt.Errorf("failed to initialize vsduel days: %w", err)
 		}
 		err = tx.Commit()
 		if err != nil {
-			return err
+			tx.Rollback()
+			return fmt.Errorf("failed to initialize vsduel days: %w", err)
 		}
 	}
 
@@ -193,6 +206,7 @@ func GetDays(retry ...bool) (DayMap, error) {
 		var d Day
 		err = rows.StructScan(&d)
 		if err != nil {
+			rows.Close()
 			return nil, err
 		}
 		ds[d.DayOfWeek] = d
@@ -218,6 +232,7 @@ func (v *VsDuel) Create() error {
 		v.LeagueId,
 		v.TournamentId)
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 	x, err := res.RowsAffected()
@@ -231,6 +246,7 @@ func (v *VsDuel) Create() error {
 	}
 	err = tx.Commit()
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 
@@ -268,6 +284,7 @@ func (v *VsDuel) StartWeek(week int, as []string) error {
 		k.WeekNumber,
 		k.VsDuelId)
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 	x, err := res.RowsAffected()
@@ -299,6 +316,7 @@ func (v *VsDuel) StartWeek(week int, as []string) error {
 
 	err = tx.Commit()
 	if err != nil {
+		tx.Rollback()
 		return fmt.Errorf("failed to start week %d for %s: %w", k.WeekNumber, k.VsDuelId, err)
 	}
 
@@ -334,10 +352,12 @@ func (v *VsDuel) GetWeeks() error {
 		var k Week
 		err = rows.StructScan(&k)
 		if err != nil {
+			rows.Close()
 			return err
 		}
 		err = k.GetAlliances()
 		if err != nil {
+			rows.Close()
 			return err
 		}
 		ks[k.WeekNumber] = k
@@ -376,6 +396,7 @@ func (k *Week) GetAlliances() error {
 		var aid string
 		err = rows.Scan(&aid)
 		if err != nil {
+			rows.Close()
 			return err
 		}
 		k.AllianceIds = append(k.AllianceIds, aid)
@@ -385,6 +406,8 @@ func (k *Week) GetAlliances() error {
 }
 
 func (k *Week) StartDay(dow string) error {
+	logger.Log.Info("vsduel.StartDay: start")
+
 	var w wtid.WTID
 	w.New("wartracker", "vsdueldata", 0)
 
@@ -395,7 +418,7 @@ func (k *Week) StartDay(dow string) error {
 
 	tx, err := db.Connection.Begin()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to start vsduel day %s: %w", dow, err)
 	}
 	res, err := tx.Exec("INSERT INTO vsduel_data (id, day_of_week, vsduel_week_id) VALUES (?, ?, ?)",
 		d.Id,
@@ -403,12 +426,12 @@ func (k *Week) StartDay(dow string) error {
 		d.WeekId)
 	if err != nil {
 		tx.Rollback()
-		return err
+		return fmt.Errorf("failed to start vsduel day %s: %w", dow, err)
 	}
 	x, err := res.RowsAffected()
 	if err != nil {
 		tx.Rollback()
-		return err
+		return fmt.Errorf("failed to start vsduel day %s: %w", dow, err)
 	}
 	if x != 1 {
 		tx.Rollback()
@@ -416,9 +439,11 @@ func (k *Week) StartDay(dow string) error {
 	}
 	err = tx.Commit()
 	if err != nil {
-		return err
+		tx.Rollback()
+		return fmt.Errorf("failed to insert duel data: %w", err)
 	}
 
+	logger.Log.Info("vsduel.StartDay: end")
 	return nil
 }
 
@@ -436,6 +461,7 @@ func (k *Week) GetDays() error {
 		var d Data
 		err = rows.StructScan(&d)
 		if err != nil {
+			rows.Close()
 			return err
 		}
 		dm[d.DayOfWeek] = d
@@ -513,6 +539,7 @@ func (d *Data) GetCommanderData() error {
 		var cd CommanderData
 		err = rows.StructScan(&cd)
 		if err != nil {
+			rows.Close()
 			return err
 		}
 		cdm[cd.CommanderId] = cd
@@ -561,6 +588,7 @@ func (d *Data) UpsertAllianceData(ad AllianceDataMap) error {
 	}
 
 	if vp == 0 {
+		tx.Rollback()
 		return fmt.Errorf("upsertAllianceData: vs points are zero: %v", ad)
 	}
 
@@ -599,7 +627,8 @@ func (d *Data) UpsertCommanderData(cd CommanderDataMap) error {
 	}
 	err = tx.Commit()
 	if err != nil {
-		return err
+		tx.Rollback()
+		return fmt.Errorf("failed to insert duel data: %w", err)
 	}
 
 	d.CommanderData = cd
@@ -622,6 +651,7 @@ func (cdm *CommanderDataMap) Exists(cid string) (bool, error) {
 
 // Takes a zipfile containing a single day of versus points ranking screen shots and adds the data to the duel.
 func (k *Week) ScanPointsRanking(z []byte, dow string) ([]string, error) {
+	logger.Log.Info("vsduel.ScanPointsRanking: start")
 	var badimg []string
 
 	err := k.GetDays()
@@ -633,7 +663,7 @@ func (k *Week) ScanPointsRanking(z []byte, dow string) ([]string, error) {
 
 	cd := make(CommanderDataMap)
 
-	files, err := unzipSS(z)
+	files, err := common.UnzipSS(z)
 	if err != nil {
 		return nil, fmt.Errorf("unable to unzip sreen shots: %w", err)
 	}
@@ -650,23 +680,22 @@ func (k *Week) ScanPointsRanking(z []byte, dow string) ([]string, error) {
 			return nil, err
 		}
 
-		// TODO: Crop points should be config/args
+		nb, err := common.CropImage(b, CropNames)
+		if err != nil {
+			return nil, err
+		}
+		pb, err := common.CropImage(b, CropPoints)
+		if err != nil {
+			return nil, err
+		}
+
 		var ns *scanner.Scanner
 		var ps *scanner.Scanner
-		if dow == "Saturday" {
-			ns, err = scanner.NewScanner(b, true, true, image.Point{435, 580}, image.Point{540, 1775})
-		} else {
-			ns, err = scanner.NewScanner(b, false, true, image.Point{447, 715}, image.Point{552, 1725})
-		}
+		ns, err = scanner.NewScanner(nb, false)
 		if err != nil {
 			return nil, fmt.Errorf("could not create names scanner: %w", err)
 		}
-		// TODO: Crop points should be config/args
-		if dow == "Saturday" {
-			ps, err = scanner.NewScanner(b, true, true, image.Point{934, 580}, image.Point{358, 1775})
-		} else {
-			ps, err = scanner.NewScanner(b, false, true, image.Point{993, 715}, image.Point{312, 1725})
-		}
+		ps, err = scanner.NewScanner(pb, false)
 		if err != nil {
 			return nil, fmt.Errorf("could not create points scanner: %w", err)
 		}
@@ -719,9 +748,9 @@ func (k *Week) ScanPointsRanking(z []byte, dow string) ([]string, error) {
 				badimg = append(badimg, f.Name)
 				continue
 			}
-			if dow == "Saturday" {
-				k.fixSaturday(&x)
-			}
+			//			if dow == "Saturday" {
+			//				k.fixSaturday(&x)
+			//			}
 			cd[x.CommanderId] = x
 		}
 	}
@@ -735,6 +764,7 @@ func (k *Week) ScanPointsRanking(z []byte, dow string) ([]string, error) {
 
 	k.Data[dow] = d
 
+	logger.Log.Info("vsduel.ScanPointsRanking: end")
 	return badimg, nil
 }
 
@@ -786,6 +816,8 @@ func (ad *AllianceData) processAlliance(cdm CommanderDataMap) {
 }
 
 func (cd *CommanderData) processCommander(a, c string, p int) error {
+	logger.Log.Info("vsduel.processCommander: start")
+
 	var cc commander.Commander
 	var aa alliance.Alliance
 
@@ -797,7 +829,7 @@ func (cd *CommanderData) processCommander(a, c string, p int) error {
 	}
 	err = aa.GetByTag(t[0])
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to get alliance by tag %s: %w", t[0], err)
 	}
 	cd.AllianceId = aa.Id
 
@@ -808,7 +840,7 @@ func (cd *CommanderData) processCommander(a, c string, p int) error {
 			cc.Name = c
 			err = cc.Create()
 			if err != nil {
-				return err
+				return fmt.Errorf("unable to create commander %s: %w", cc.Name, err)
 			}
 			var ccd commander.Data
 			date := time.Now().Format("2006-01-02")
@@ -816,7 +848,7 @@ func (cd *CommanderData) processCommander(a, c string, p int) error {
 			ccd.Date = date
 			err := cc.AddData(date, ccd)
 			if err != nil {
-				return err
+				return fmt.Errorf("unable to add commander data for %s: %w", cc.Name, err)
 			}
 
 			cd.New = true
@@ -827,16 +859,8 @@ func (cd *CommanderData) processCommander(a, c string, p int) error {
 	cd.CommanderId = cc.Id
 	cd.Name = c
 
+	logger.Log.Info("vsduel.processCommander: end")
 	return nil
-}
-
-func unzipSS(z []byte) ([]*zip.File, error) {
-	a, err := zip.NewReader(bytes.NewReader(z), int64(len(z)))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create zip reader: %w", err)
-	}
-
-	return a.File, nil
 }
 
 func (k *Week) fixSaturday(cd *CommanderData) error {
@@ -908,6 +932,7 @@ func (cd CommanderDataMap) UpdateRanks() error {
 	}
 	err = tx.Commit()
 	if err != nil {
+		tx.Rollback()
 		return fmt.Errorf("failed to update ranks: %w", err)
 	}
 
@@ -946,6 +971,7 @@ func (k *Week) MergeCommanderData(src, dst string) error {
 		}
 		err = tx.Commit()
 		if err != nil {
+			tx.Rollback()
 			return fmt.Errorf("failed to update vsuel commander data for %s: %w", sd.CommanderId, err)
 		}
 
